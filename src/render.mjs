@@ -1,0 +1,212 @@
+// 表示用のデータ（view）→ 1枚の HTML。通信もファイルの読み書きもしない（CSS は起動時に1回読む）。
+// 画面に出す文字はすべてエスケープする。JavaScript と外部の読み込みは入れない。
+
+import { readFileSync } from "node:fs";
+import { esc, safeHttpUrl } from "./escape.mjs";
+import { dateLabelParts, formatHM, formatHMWithDate, jmaLocalParts, ymd } from "./time.mjs";
+
+const CSS = readFileSync(new URL("./style.css", import.meta.url), "utf8");
+
+export const TEXT = {
+  pageTitle: "朝のまとめ",
+  skip: "本文へ移動",
+  weatherHeading: "天気（気象庁の発表）",
+  staleMark: "前回取得分",
+  pop: "降水確率",
+  min: "最低",
+  max: "最高",
+  none: "—（発表なし）",
+  weatherFailed: (hm) => `気象庁のデータを取得できませんでした（${hm}）`,
+  weatherRecover: "設定の地域コードと通信を確かめて、時間をおいてもう一度実行してください。",
+  weatherLimit: "本日の気象庁への取得回数の上限に達しました。天気の欄は取得できませんでした。",
+  noteReport: (office, report) =>
+    `発表：${office}（${report}）。気象庁の天気予報を、文言と数値を変えずに表示しています。項目の抜き出し、並べ方、日付と時間帯の書き方は morning-brief-jp が行っています。`,
+  noteFetched: (t) => `取得：${t}。最新の情報は気象庁ホームページで確かめてください。表示の遅れや誤りについて、作者は責任を負いません。`,
+  noteIndependent: "このツールは気象庁とは関係のない個人の作品です。",
+  sourceJmaUrl: (code) => `https://www.jma.go.jp/bosai/forecast/#area_type=offices&area_code=${code}`,
+  sourcePdlUrl: "https://www.digital.go.jp/resources/open_data/public_data_license_v1.0",
+  noteProcessed: "気象庁ホームページの天気予報をもとに morning-brief-jp が作成（文言と数値は変更していません）",
+  scheduleHeading: "今日の予定",
+  allDay: "終日",
+  noEvents: "今日の予定はありません。",
+  scheduleFailed: "予定を読み込めませんでした。iCal の URL の設定を確かめてください。",
+  schedulePartial: "一部の予定を読めませんでした。",
+  untitled: "（題名なし）",
+  newsHeading: "ニュース",
+  newsTerms: "見出しと説明は各サイトのものです。利用条件は各サイトで確かめてください。",
+  feedEmpty: "前日6時以降の新しい記事はありません。",
+  feedFailed: "取得できませんでした。フィードの URL を確かめてください。",
+  more: (n) => `残り${n}件を見る`,
+  footer: (version, created) => `morning-brief-jp ${version} で作成 ${created}`,
+};
+
+const BRAND = "morning-brief-jp";
+/** すでにエスケープした文字の中の作品名に translate="no" を付ける。 */
+const brand = (escaped) => escaped.split(BRAND).join(`<span translate="no">${BRAND}</span>`);
+
+const link = (href, label) => `<a href="${esc(href)}" rel="noopener noreferrer">${esc(label)}</a>`;
+
+function dayHeading(day) {
+  const p = dateLabelParts(day.date);
+  const d = `${p.month}月${p.day}日（${p.weekday}）`;
+  return day.label ? `${day.label} ${d}` : d;
+}
+
+function popLabel(pop) {
+  return pop.to === null ? `${pop.from}時〜` : `${pop.from}–${pop.to}時`;
+}
+
+const valueOrNone = (v, unit = "") => (v === null || v === undefined ? TEXT.none : `${v}${unit}`);
+
+function renderDay(day, tempPointName) {
+  const pops = day.pops.length
+    ? `<dl class="grid">${day.pops.map((p) => `<div><dt>${esc(popLabel(p))}</dt><dd>${esc(valueOrNone(p.value, "%"))}</dd></div>`).join("")}</dl>`
+    : `<p>${esc(TEXT.none)}</p>`;
+  const tempLabel = tempPointName ? `気温（${tempPointName}）` : "気温";
+  return `<article class="day">
+<h4>${esc(dayHeading(day))}</h4>
+<p class="wx">${esc(day.weather ?? TEXT.none)}</p>
+<p class="label">${esc(TEXT.pop)}</p>
+${pops}
+<p class="label">${esc(tempLabel)}</p>
+<dl class="grid"><div><dt>${esc(TEXT.min)}</dt><dd>${esc(valueOrNone(day.tempMin, "℃"))}</dd></div><div><dt>${esc(TEXT.max)}</dt><dd>${esc(valueOrNone(day.tempMax, "℃"))}</dd></div></dl>
+</article>`;
+}
+
+function reportText(reportDatetime) {
+  const p = jmaLocalParts(reportDatetime);
+  return p ? `${p.date} ${p.hm}` : String(reportDatetime ?? "");
+}
+
+export function renderWeather(w, { now, timezone }) {
+  const head = `<div class="sec-head"><h2 id="h-weather">${esc(TEXT.weatherHeading)}</h2>${w.state === "stale" ? `<p class="mark">${esc(TEXT.staleMark)}</p>` : ""}</div>`;
+  let body;
+  const notes = [];
+  if (w.state === "failed") {
+    body =
+      w.failReason === "limit"
+        ? `<div class="alert"><p>${esc(TEXT.weatherLimit)}</p></div>`
+        : `<div class="alert"><p>${esc(TEXT.weatherFailed(formatHM(w.failedAt, timezone)))}</p><p>${esc(TEXT.weatherRecover)}</p></div>`;
+  } else {
+    body = `<h3>${esc(w.areaName ?? "")}</h3>
+<div class="days">
+${w.days.map((d) => renderDay(d, w.tempPointName)).join("\n")}
+</div>`;
+    notes.push(`<p>${brand(esc(TEXT.noteReport(w.office ?? "", reportText(w.reportDatetime))))}</p>`);
+    notes.push(`<p>${esc(TEXT.noteFetched(formatHMWithDate(w.fetchedAt, now, timezone)))}</p>`);
+  }
+  notes.push(`<p>${esc(TEXT.noteIndependent)}</p>`);
+  notes.push(`<p>出典：気象庁ホームページ（${link(TEXT.sourceJmaUrl(w.areaCode), TEXT.sourceJmaUrl(w.areaCode))}）、公共データ利用規約（第1.0版）（${link(TEXT.sourcePdlUrl, TEXT.sourcePdlUrl)}）</p>`);
+  notes.push(`<p>${brand(esc(TEXT.noteProcessed))}</p>`);
+  return `<section class="weather" aria-labelledby="h-weather">
+${head}
+${body}
+<div class="notes">
+${notes.join("\n")}
+</div>
+</section>`;
+}
+
+function eventTime(ev, timezone) {
+  if (ev.allDay) return TEXT.allDay;
+  const s = formatHM(ev.start, timezone);
+  return ev.end ? `${s}–${formatHM(ev.end, timezone)}` : s;
+}
+
+export function renderSchedule(s, { timezone }) {
+  let body;
+  if (s.state === "failed") {
+    body = `<div class="alert"><p>${esc(TEXT.scheduleFailed)}</p></div>`;
+  } else {
+    const list = s.events.length
+      ? `<ul class="events">${s.events.map((ev) => `<li><span class="ev-time">${esc(eventTime(ev, timezone))}</span><span class="ev-title">${esc(ev.title || TEXT.untitled)}</span></li>`).join("")}</ul>`
+      : s.partial
+        ? ""
+        : `<p class="empty">${esc(TEXT.noEvents)}</p>`;
+    body = list + (s.partial ? `<div class="alert"><p>${esc(TEXT.schedulePartial)}</p></div>` : "");
+  }
+  return `<section class="schedule" aria-labelledby="h-schedule">
+<div class="sec-head"><h2 id="h-schedule">${esc(TEXT.scheduleHeading)}</h2></div>
+${body}
+</section>`;
+}
+
+function renderItem(item, now, timezone) {
+  const href = safeHttpUrl(item.link);
+  const title = href ? link(href, item.title) : `<span class="title">${esc(item.title)}</span>`;
+  const time = `<time datetime="${esc(item.publishedAt.toISOString())}">${esc(formatHMWithDate(item.publishedAt, now, timezone))}</time>`;
+  const desc = item.description ? `<p class="desc">${esc(item.description)}</p>` : "";
+  return `<li>${title}${time}${desc}</li>`;
+}
+
+export function renderNews(news, { now, timezone, visibleItemsPerFeed }) {
+  const feeds = news.feeds
+    .map((f, i) => {
+      let body;
+      if (f.state === "failed") body = `<div class="alert"><p>${esc(TEXT.feedFailed)}</p></div>`;
+      else if (f.items.length === 0) body = `<p class="empty">${esc(TEXT.feedEmpty)}</p>`;
+      else {
+        const shown = f.items.slice(0, visibleItemsPerFeed);
+        const rest = f.items.slice(visibleItemsPerFeed);
+        body = `<ul class="items">${shown.map((it) => renderItem(it, now, timezone)).join("")}</ul>`;
+        if (rest.length) body += `<details><summary>${esc(TEXT.more(rest.length))}</summary><ul class="items">${rest.map((it) => renderItem(it, now, timezone)).join("")}</ul></details>`;
+      }
+      return `<section class="feed" aria-labelledby="h-feed-${i}"><h3 id="h-feed-${i}">${esc(f.name)}</h3>${body}</section>`;
+    })
+    .join("\n");
+  return `<section class="news" aria-labelledby="h-news">
+<div class="sec-head"><h2 id="h-news">${esc(TEXT.newsHeading)}</h2></div>
+<p class="terms">${esc(TEXT.newsTerms)}</p>
+<div class="feeds">
+${feeds}
+</div>
+</section>`;
+}
+
+export function render(view) {
+  const { timezone, createdAt } = view;
+  const today = ymd(createdAt, timezone);
+  const p = dateLabelParts(today);
+  const title = `${TEXT.pageTitle} ${today}（${p.weekday}）`;
+  const hasNews = Boolean(view.news);
+  const ctx = { now: createdAt, timezone, visibleItemsPerFeed: view.visibleItemsPerFeed ?? 4 };
+
+  const main = [renderWeather(view.weather, ctx), view.schedule ? renderSchedule(view.schedule, ctx) : ""].filter(Boolean).join("\n");
+  const created = `${today} ${formatHM(createdAt, timezone)}`;
+
+  return `<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<meta name="referrer" content="no-referrer">
+<meta name="robots" content="noindex">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'">
+<meta name="theme-color" content="#F5F1E8" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#1C1A17" media="(prefers-color-scheme: dark)">
+<title>${esc(title)}</title>
+<style>
+${CSS}
+</style>
+</head>
+<body>
+<a class="skip" href="#main">${esc(TEXT.skip)}</a>
+<div class="page ${hasNews ? "has-news" : "no-news"}">
+<header class="masthead">
+<h1>${esc(TEXT.pageTitle)}</h1>
+<p class="year">${p.year}年</p>
+<p class="date"><span>${p.month}月</span><span class="d">${p.day}</span><span>日（${esc(p.weekday)}）</span></p>
+</header>
+<main id="main">
+<div class="col col-main">
+${main}
+</div>
+${hasNews ? `<div class="col col-news">\n${renderNews(view.news, ctx)}\n</div>` : ""}
+</main>
+<footer>${brand(esc(TEXT.footer(view.version, created)))}</footer>
+</div>
+</body>
+</html>
+`;
+}
