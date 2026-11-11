@@ -47,8 +47,27 @@ test("地域コードが空なら止める", () => {
   assert.throws(() => normalizeConfig({}, "/b"), ConfigError);
 });
 
-test("地域コードが6桁の数字でなければ止める", () => {
-  assert.throws(() => normalizeConfig({ weather: { areaCode: "13000" } }, "/b"), (e) => e.message === "地域コード 13000 が気象庁のデータにありません。weather.areaCode を確かめてください。");
+test("地域コードが6桁の数字でなければ止める（「形が違う」の文言。「データにありません」とは言わない）", () => {
+  for (const v of ["13000", "abc", "1300001", 13000]) {
+    assert.throws(
+      () => normalizeConfig({ weather: { areaCode: v } }, "/b"),
+      (e) => e instanceof ConfigError && e.message === `weather.areaCode の形が違います（${v}）。6桁の数字で書いてください（東京都の例：130000）。`,
+      String(v),
+    );
+  }
+});
+
+test("設定が配列や数値（JSON としては正しい）：「オブジェクトで書いてください」の文言", async () => {
+  for (const raw of [[], [{ weather: { areaCode: "130000" } }], 1, "x", null]) {
+    assert.throws(() => normalizeConfig(raw, "/b"), (e) => e instanceof ConfigError && e.message === "config.json は { } で囲んだオブジェクトで書いてください（config.example.json の形）。", JSON.stringify(raw));
+  }
+  const t = await tempDir();
+  try {
+    const file = await writeConfig(t.dir, "[]");
+    await assert.rejects(loadConfig(file), (e) => e instanceof ConfigError && !e.message.includes("JSON として読めません"));
+  } finally {
+    await t.cleanup();
+  }
 });
 
 test("相対パスは設定ファイルのフォルダが基準。既定値が入る", () => {

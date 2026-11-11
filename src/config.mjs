@@ -16,6 +16,8 @@ export const MESSAGES = {
   badJson: (line) => `config.json の ${line} 行目付近を確かめてください（JSON として読めません）。`,
   areaEmpty:
     "weather.areaCode が設定されていません。気象庁の天気予報ページのアドレスにある area_code の数字を入れてください（東京都の例：130000）。",
+  areaBadForm: (code) => `weather.areaCode の形が違います（${code}）。6桁の数字で書いてください（東京都の例：130000）。`,
+  notObject: "config.json は { } で囲んだオブジェクトで書いてください（config.example.json の形）。",
   areaUnknown: (code) => `地域コード ${code} が気象庁のデータにありません。weather.areaCode を確かめてください。`,
   badValue: (key, def) => `config.json の ${key} の値を確かめてください。既定値（${def}）を使います。`,
 };
@@ -56,12 +58,12 @@ function intInRange(value, min, max) {
  */
 export function normalizeConfig(raw, baseDir) {
   const notices = [];
-  if (!isPlainObject(raw)) throw new ConfigError(MESSAGES.badJson(1));
+  if (!isPlainObject(raw)) throw new ConfigError(MESSAGES.notObject); // 配列や数値は JSON としては正しいので、形の文言にする
 
   const weather = isPlainObject(raw.weather) ? raw.weather : {};
   const areaCode = typeof weather.areaCode === "string" ? weather.areaCode.trim() : weather.areaCode == null ? "" : String(weather.areaCode).trim();
   if (areaCode === "") throw new ConfigError(MESSAGES.areaEmpty);
-  if (!/^\d{6}$/.test(areaCode)) throw new ConfigError(MESSAGES.areaUnknown(areaCode));
+  if (!/^\d{6}$/.test(areaCode)) throw new ConfigError(MESSAGES.areaBadForm(areaCode));
 
   const str = (v) => (typeof v === "string" && v.trim() !== "" ? v.trim() : null);
 
