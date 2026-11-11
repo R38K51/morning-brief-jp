@@ -6,3 +6,5 @@ out/
 .env.*
 *.log
 node_modules/
+# 画面確認の道具（playwright-cli）の記録
+.playwright-cli/
