@@ -161,10 +161,19 @@ test("明日の項目（天気、降水確率、最低、最高）がすべて�
 
 test("今日の項目がすべて空：「今日」で同じ形の1行", () => {
   const w = freshWeather();
-  w.days[0] = { ...w.days[0], weather: null, pops: w.days[0].pops.map((p) => ({ ...p, value: null })), tempMin: null, tempMax: null };
+  // 見本の 11:00 発表には今日の最低があり決まりで消えている（tempMinHidden）。ここでは発表自体に無い場合を作る
+  w.days[0] = { ...w.days[0], weather: null, pops: w.days[0].pops.map((p) => ({ ...p, value: null })), tempMin: null, tempMinHidden: false, tempMax: null };
   const ps = paragraphs(render(view({ weather: w })));
   assert.ok(ps.includes("この発表（2026-11-11 11:00）に、今日の項目は含まれていません。"));
   assert.equal(ps.filter((p) => p.includes("含まれていません")).length, 1);
+});
+
+test("最低が決まりで消えただけ（消す前は値があった）なら「含まれていません」は出さない", () => {
+  const w = freshWeather();
+  w.days[0] = { ...w.days[0], weather: null, pops: w.days[0].pops.map((p) => ({ ...p, value: null })), tempMin: null, tempMinHidden: true, tempMax: null };
+  const html = render(view({ weather: w }));
+  assert.equal(html.includes("含まれていません"), false);
+  assert.ok(html.split('<article class="day">')[1].includes("—（発表なし）"), "個別の発表なしは出る");
 });
 
 test("一部だけ空（最高だけある、降水確率が1つだけある）なら「含まれていません」は出さない", () => {

@@ -89,6 +89,12 @@ test("気温の欄は timeDefines の時刻で決まり、配列の順に依ら�
   assert.deepEqual(m.get("2026-11-12"), { min: "5", max: "20" });
 });
 
+test("決まりで消した今日の最低は minHidden で残す（値そのものは出さない）。値が無いときは付けない", () => {
+  const defs = ["2026-11-11T00:00:00+09:00", "2026-11-11T09:00:00+09:00"];
+  assert.deepEqual(tempsByDate(defs, ["7", null], "2026-11-11T05:00:00+09:00").get("2026-11-11"), { min: null, max: null, minHidden: true });
+  assert.deepEqual(tempsByDate(defs, [null, null], "2026-11-11T05:00:00+09:00").get("2026-11-11"), { min: null, max: null });
+});
+
 test("値は比べない：明日の最低と最高が同じでも両方出す", () => {
   const m = tempsByDate(["2026-11-12T00:00:00+09:00", "2026-11-12T09:00:00+09:00"], ["12", "12"], "2026-11-11T11:00:00+09:00");
   assert.deepEqual(m.get("2026-11-12"), { min: "12", max: "12" });

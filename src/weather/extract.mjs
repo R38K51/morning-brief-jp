@@ -112,6 +112,8 @@ export function tempsByDate(timeDefines, temps, reportDatetime) {
       const defined = Date.parse(timeDefines[i]);
       const sameDayOrLater = Number.isFinite(report) && Number.isFinite(defined) && report >= defined;
       slot.min = sameDayOrLater ? null : value;
+      // 決まりで消した値があったか（「項目がすべて空の日」の判定は消す前の値で行う。dev-checker の直すとよいこと）
+      if (sameDayOrLater && value !== null) slot.minHidden = true;
     } else if (p.hour === 9) {
       slot.max = value;
     }
@@ -173,6 +175,7 @@ export function extractForecast(body, { areaName = null, tempPointName = null, t
       weather: d.weather === null ? null : tidySpaces(d.weather),
       pops: slots.filter((s) => s.date === d.date).map(({ from, to, value }) => ({ from, to, value })),
       tempMin: t.min,
+      tempMinHidden: t.minHidden === true,
       tempMax: t.max,
     };
   });

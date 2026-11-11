@@ -63,10 +63,13 @@ function popLabel(pop) {
 
 const valueOrNone = (v, unit = "") => (v === null || v === undefined ? TEXT.none : `${v}${unit}`);
 
-/** 天気、降水確率、最低、最高がすべて空か（日の見出しの下に「含まれていません」の1行を出す条件）。 */
+/**
+ * 天気、降水確率、最低、最高がすべて空か（日の見出しの下に「含まれていません」の1行を出す条件）。
+ * 最低は決まりで消す前の値で判定する（発表に含まれていたのに「含まれていません」と出さないため）。
+ */
 const isEmpty = (v) => v === null || v === undefined;
 function dayAllEmpty(day) {
-  return isEmpty(day.weather) && day.pops.every((p) => isEmpty(p.value)) && isEmpty(day.tempMin) && isEmpty(day.tempMax);
+  return isEmpty(day.weather) && day.pops.every((p) => isEmpty(p.value)) && isEmpty(day.tempMin) && !day.tempMinHidden && isEmpty(day.tempMax);
 }
 
 function renderDay(day, report) {
