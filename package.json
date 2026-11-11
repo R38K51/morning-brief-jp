@@ -1,0 +1,22 @@
+{
+  "name": "morning-brief-jp",
+  "version": "0.1.0",
+  "description": "A one-page morning brief (JMA weather, your RSS feeds, today's iCal events) generated locally as a single HTML file.",
+  "type": "module",
+  "private": true,
+  "license": "MIT",
+  "bin": {
+    "morning-brief": "bin/morning-brief.mjs"
+  },
+  "scripts": {
+    "start": "node bin/morning-brief.mjs",
+    "test": "node --test \"test/*.test.mjs\""
+  },
+  "engines": {
+    "node": ">=22"
+  },
+  "dependencies": {
+    "fast-xml-parser": "5.11.2",
+    "ical.js": "2.2.1"
+  }
+}

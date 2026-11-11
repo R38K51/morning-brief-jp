@@ -1,0 +1,8 @@
+# 利用者の設定と、予定や天気が入りうるファイル（コミットしない）
+config.json
+.cache/
+out/
+.env
+.env.*
+*.log
+node_modules/

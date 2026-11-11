@@ -1,0 +1,23 @@
+{
+  "weather": {
+    "areaCode": "130000",
+    "areaName": "東京地方",
+    "tempPointName": "東京"
+  },
+  "schedule": {
+    "enabled": false,
+    "icalUrlEnv": "MORNING_BRIEF_ICAL_URL"
+  },
+  "feeds": [
+    { "name": "例のフィード（名前を付けて URL を入れる）", "url": "" }
+  ],
+  "rss": {
+    "sinceHour": 6,
+    "visibleItemsPerFeed": 4,
+    "maxItemsPerFeed": 10
+  },
+  "output": {
+    "path": "./out/morning-brief.html"
+  },
+  "timezone": "Asia/Tokyo"
+}
