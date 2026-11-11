@@ -133,6 +133,7 @@ section { min-width: 0; }
 .feed h3 { font-size: var(--fs-md); color: var(--dim); padding-bottom: var(--sp-1); }
 .items li { padding: var(--sp-3) 0; border-bottom: var(--rule); min-height: var(--tap-min); }
 .items a, .items .title { font-weight: var(--fw-strong); display: block; }
+.items a { display: flex; align-items: center; min-height: var(--tap-min); } /* 指で押せる高さ（44px）。1行の見出しでも */
 .items time { display: block; font-size: var(--fs-sm); color: var(--faint); margin-top: var(--sp-1); }
 .items .desc { font-size: var(--fs-sm); color: var(--dim); margin-top: var(--sp-1); }
 details > summary { min-height: var(--tap-min); display: flex; align-items: center; cursor: pointer; color: var(--ink); font-size: var(--fs-sm); text-decoration: underline; text-underline-offset: 0.18em; margin-top: var(--sp-2); }

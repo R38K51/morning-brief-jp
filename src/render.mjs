@@ -53,6 +53,11 @@ function dayHeading(day) {
 }
 
 function popLabel(pop) {
+  // 分が付く時刻があるときは「12:30–18:00」の形（「時」と混ぜない）
+  if (pop.from.includes(":") || (pop.to ?? "").includes(":")) {
+    const hm = (x) => (x.includes(":") ? x : `${x}:00`);
+    return pop.to === null ? `${hm(pop.from)}〜` : `${hm(pop.from)}–${hm(pop.to)}`;
+  }
   return pop.to === null ? `${pop.from}時〜` : `${pop.from}–${pop.to}時`;
 }
 

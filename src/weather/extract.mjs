@@ -43,7 +43,11 @@ function pickArea(areas, wantedName, wantedCode) {
  * - 次が同じ日 → その時刻（12–18時）
  * - 次が翌日の0時 → 24時（18–24時）
  * - 次が無い、またはそれ以外（日をまたぐ） → 終わりなし（18時〜）
+ * 時刻に分が付くとき（例：12:30）は分を捨てず "12:30" の形で持つ（時刻を変えて出さないため）。
  */
+/** 時刻の表記：分が0なら時だけ（"12"）、分があれば "12:30"。 */
+const clock = (p) => (p.minute === 0 ? String(p.hour) : `${p.hour}:${String(p.minute).padStart(2, "0")}`);
+
 export function popSlots(timeDefines, pops) {
   const out = [];
   if (!Array.isArray(timeDefines)) return out;
@@ -53,12 +57,14 @@ export function popSlots(timeDefines, pops) {
     const next = i + 1 < timeDefines.length ? jmaLocalParts(timeDefines[i + 1]) : null;
     let to = null;
     if (next) {
-      if (next.date === cur.date && next.hour > cur.hour && next.minute === 0) to = String(next.hour);
+      const curMin = cur.hour * 60 + cur.minute;
+      const nextMin = next.hour * 60 + next.minute;
+      if (next.date === cur.date && nextMin > curMin) to = clock(next);
       else if (next.date === addDays(cur.date, 1) && next.hour === 0 && next.minute === 0) to = "24";
     }
     out.push({
       date: cur.date,
-      from: String(cur.hour),
+      from: clock(cur),
       to,
       value: rawValue(Array.isArray(pops) ? pops[i] : undefined),
     });

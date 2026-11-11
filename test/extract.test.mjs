@@ -119,3 +119,39 @@ test("形が違う JSON は例外", () => {
   assert.throws(() => extractForecast({}, opts));
   assert.throws(() => extractForecast([{ timeSeries: [] }], opts));
 });
+
+test("気温の欄（temps の timeSeries）が丸ごと無い JSON：最低・最高とも null、地点も null、知らせも出さない", () => {
+  const body = jma1100();
+  body[0].timeSeries = body[0].timeSeries.filter((ts) => !ts.areas.some((a) => Array.isArray(a.temps)));
+  const r = extractForecast(body, opts);
+  assert.equal(r.tempPointName, null);
+  assert.deepEqual(r.days.map((d) => [d.tempMin, d.tempMax]), [[null, null], [null, null]]);
+  assert.deepEqual(r.notices, []);
+  assert.equal(r.days[0].pops.length, 2, "降水確率と天気の文はそのまま出る");
+});
+
+test("官署名（publishingOffice）が無い JSON：office は null（官署名を作らない）", () => {
+  const body = jma1100();
+  delete body[0].publishingOffice;
+  const r = extractForecast(body, opts);
+  assert.equal(r.office, null);
+  assert.equal(r.reportDatetime, "2026-11-11T11:00:00+09:00");
+});
+
+test("降水確率の timeDefines に分が付く：分を捨てず、終わりも次の時刻から出す", () => {
+  const p = (h, m) => `2026-11-11T${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}:00+09:00`;
+  const slots = popSlots([p(12, 30), p(18, 0), p(21, 15)], ["10", "20", "30"]);
+  assert.deepEqual(slots, [
+    { date: "2026-11-11", from: "12:30", to: "18", value: "10" },
+    { date: "2026-11-11", from: "18", to: "21:15", value: "20" },
+    { date: "2026-11-11", from: "21:15", to: null, value: "30" },
+  ]);
+  // 次が翌日の0時でも、分が付いた0時（00:30）は24時にしない
+  const cross = popSlots([p(18, 0), "2026-11-12T00:30:00+09:00"], ["1", "2"]);
+  assert.equal(cross[0].to, null);
+});
+
+test("気温の timeDefines に分が付く欄は、最低にも最高にも入れない（時刻を推測しない）", () => {
+  const m = tempsByDate(["2026-11-12T00:30:00+09:00", "2026-11-12T09:00:00+09:00"], ["8", "17"], "2026-11-11T17:00:00+09:00");
+  assert.deepEqual(m.get("2026-11-12"), { min: null, max: "17" });
+});

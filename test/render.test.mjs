@@ -121,3 +121,39 @@ test("CSS に禁止のもの（transition: all、outline: none、100vh、line-cl
   const html = render(view());
   assert.doesNotMatch(html, /transition:\s*all|outline:\s*none|100vh|line-clamp|text-overflow|user-scalable/);
 });
+
+test("官署名が無いとき：注記の官署は空のまま（官署名を作らない）。ほかの文は同じ", () => {
+  const html = render(view({ weather: freshWeather({ office: null }) }));
+  const ps = paragraphs(html);
+  assert.ok(ps.includes(NOTE1.replace("発表：気象庁（", "発表：（")), "官署の所が空で、ほかは一字一句同じ");
+  assert.equal(htmlText(html).includes("気象台"), false);
+  for (const s of [NOTE2("11:12"), NOTE3, SOURCE("130000"), PROCESSED]) assert.ok(ps.includes(s), s);
+});
+
+test("気温の欄が無い JSON：最低・最高とも「—（発表なし）」、見出しは「気温」だけ", () => {
+  const body = jma1100();
+  body[0].timeSeries = body[0].timeSeries.filter((ts) => !ts.areas.some((a) => Array.isArray(a.temps)));
+  const ex = extractForecast(body, { areaName: "東京地方", tempPointName: "東京", today: "2026-11-11" });
+  const html = render(view({ weather: freshWeather({ ...ex }) }));
+  const ps = paragraphs(html);
+  assert.equal(ps.filter((p) => p === "気温").length, 2);
+  assert.equal((html.match(/<dt>最低<\/dt><dd>—（発表なし）<\/dd>/g) ?? []).length, 2);
+  assert.equal((html.match(/<dt>最高<\/dt><dd>—（発表なし）<\/dd>/g) ?? []).length, 2);
+});
+
+test("降水確率の時刻に分が付く：「12:30–18:00」「21:15〜」の形（時と混ぜない）", () => {
+  const w = freshWeather();
+  w.days[0].pops = [
+    { from: "12:30", to: "18", value: "10" },
+    { from: "18", to: "21:15", value: "20" },
+    { from: "21:15", to: null, value: "30" },
+  ];
+  const html = render(view({ weather: w }));
+  for (const l of ["12:30–18:00", "18:00–21:15", "21:15〜"]) assert.match(html, new RegExp(`<dt>${l}</dt>`), l);
+});
+
+test("CSS：ニュースの見出しリンクは高さ44px（--tap-min）以上", () => {
+  const html = render(view());
+  assert.match(html, /--tap-min: 2\.75rem;/);
+  assert.match(html, /\.items a \{[^}]*min-height: var\(--tap-min\)/);
+});
