@@ -108,6 +108,7 @@ test("上限（4回）でキャッシュなし：取りに行かず、上限の�
 for (const [name, handler, cause] of [
   ["404 → 地域コード", { status: 404, body: "" }, { kind: "area-unknown", code: "130000" }],
   ["つながらない → 接続", new TypeError("fetch failed"), { kind: "network" }],
+  ["タイムアウト → 接続", new DOMException("The operation was aborted due to timeout", "TimeoutError"), { kind: "network" }],
   ["503 → 想定外の応答（番号つき）", { status: 503, body: "" }, { kind: "unexpected", status: 503 }],
   ["JSON が読めない → 想定外の応答（番号なし）", { status: 200, body: "<html>見本</html>" }, { kind: "unexpected", status: null }],
 ]) {

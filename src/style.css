@@ -99,7 +99,6 @@ section { min-width: 0; }
 .col-news { margin-top: var(--section-gap); }
 .sec-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: var(--sp-2) var(--sp-3); padding-bottom: var(--sp-2); border-bottom: var(--rule); margin-bottom: var(--sp-4); }
 .sec-head h2 { font-size: var(--fs-lg); }
-.mark { font-size: var(--fs-sm); color: var(--accent-text); border-left: var(--rule-strong); padding-left: var(--sp-2); }
 .alert { color: var(--accent-text); border-left: var(--rule-strong); padding-left: var(--sp-3); font-size: var(--fs-md); }
 .alert p + p { margin-top: var(--sp-1); }
 .stale-note { margin-bottom: var(--sp-4); }
@@ -119,6 +118,8 @@ section { min-width: 0; }
 .grid dd { font-size: var(--fs-md); }
 .notes { margin-top: var(--sp-4); padding: var(--sp-3) var(--sp-3); background: var(--surface); border-top: var(--rule); font-size: var(--fs-xs); line-height: 1.5; color: var(--dim); }
 .notes p + p { margin-top: var(--sp-2); } /* 段落の間 8px */
+.notes .src-line { display: block; } /* 出典は1つずつ別の行 */
+.notes .src-line a { display: inline-flex; align-items: center; min-height: var(--tap-min); } /* 指で押せる高さ（44px）。文字は 12px のまま */
 
 /* 予定 */
 .events li { display: flex; gap: var(--sp-3); align-items: baseline; min-height: var(--tap-min); padding: var(--sp-2) 0; border-bottom: var(--rule); }

@@ -11,7 +11,6 @@ export const TEXT = {
   pageTitle: "朝のまとめ",
   skip: "本文へ移動",
   weatherHeading: "天気（気象庁の発表）",
-  staleMark: "前回取得分",
   pop: "降水確率",
   min: "最低",
   max: "最高",
@@ -105,7 +104,8 @@ function reportText(reportDatetime) {
 }
 
 export function renderWeather(w, { now, timezone }) {
-  const head = `<div class="sec-head"><h2 id="h-weather">${esc(TEXT.weatherHeading)}</h2>${w.state === "stale" ? `<p class="mark">${esc(TEXT.staleMark)}</p>` : ""}</div>`;
+  // 前回取得分は見出しの下の帯（staleNote）だけで示す。見出し横の印は二重表示になるため出さない（2026-11-11 再確認2）
+  const head = `<div class="sec-head"><h2 id="h-weather">${esc(TEXT.weatherHeading)}</h2></div>`;
   let body;
   const notes = [];
   if (w.state === "failed") {
@@ -126,7 +126,10 @@ ${w.days.map((d) => renderDay(d, w.tempPointName, report)).join("\n")}
     notes.push(`<p>${esc(TEXT.noteFetched(formatHMWithDate(w.fetchedAt, now, timezone)))}</p>`);
   }
   notes.push(`<p>${esc(TEXT.noteIndependent)}</p>`);
-  notes.push(`<p>出典：気象庁ホームページ（${link(TEXT.sourceJmaUrl(w.areaCode), TEXT.sourceJmaUrl(w.areaCode))}）、公共データ利用規約（第1.0版）（${link(TEXT.sourcePdlUrl, TEXT.sourcePdlUrl)}）</p>`);
+  // 出典は1つずつ別の行（.src-line）。文字は1字も変えず、改行は CSS だけで行う（段落の文字は今までと同じ）
+  notes.push(
+    `<p class="source">出典：<span class="src-line">気象庁ホームページ（${link(TEXT.sourceJmaUrl(w.areaCode), TEXT.sourceJmaUrl(w.areaCode))}）、</span><span class="src-line">公共データ利用規約（第1.0版）（${link(TEXT.sourcePdlUrl, TEXT.sourcePdlUrl)}）</span></p>`,
+  );
   notes.push(`<p>${brand(esc(TEXT.noteProcessed))}</p>`);
   return `<section class="weather" aria-labelledby="h-weather">
 ${head}

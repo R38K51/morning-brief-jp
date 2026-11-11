@@ -53,11 +53,20 @@ test("発表時刻と取得時刻が別に出る。前日の取得は月日つ�
   const ps = paragraphs(html);
   assert.ok(ps.includes(NOTE1));
   assert.ok(ps.includes(NOTE2("11-10 18:20")));
-  assert.match(html, /<p class="mark">前回取得分<\/p>/);
+  assert.match(html, /<div class="alert stale-note"><p>前回取得分：/);
 });
 
-test("印「前回取得分」は stale のときだけ", () => {
+test("「前回取得分」は stale のときだけ。見出しの横の印は出さない（帯だけ）", () => {
   assert.equal(render(view()).includes("前回取得分"), false);
+  const stale = render(view({ weather: freshWeather({ state: "stale", fetchedAt: JST("2026-11-10T18:20:00") }) }));
+  assert.match(stale, /<div class="sec-head"><h2 id="h-weather">天気（気象庁の発表）<\/h2><\/div>/);
+  assert.equal(stale.split("前回取得分").length - 1, 1, "「前回取得分」は帯の1回だけ");
+});
+
+test("出典は1つずつ別の行（src-line）。段落の文字は変えない", () => {
+  const html = render(view());
+  assert.match(html, /<p class="source">出典：<span class="src-line">気象庁ホームページ（<a [^>]+>[^<]+<\/a>）、<\/span><span class="src-line">公共データ利用規約（第1\.0版）（<a [^>]+>[^<]+<\/a>）<\/span><\/p>/);
+  assert.ok(paragraphs(html).includes(SOURCE("130000")));
 });
 
 test("日ごとの表示：見出し、天気の文、降水確率の時間帯、気温", () => {
@@ -134,7 +143,7 @@ test("前回取得分：見出しのすぐ下、地方名の上に発表時刻�
   assert.ok(ps.includes(NOTE1), "注記の「発表：」はそのまま");
   assert.ok(ps.includes(NOTE2("11-11 11:12")), "注記の「取得：」はそのまま（月日つき）");
   assert.equal(htmlText(html).includes("昨日"), false);
-  assert.match(html, /<p class="mark">前回取得分<\/p>/, "見出しの横の印も残す");
+  assert.doesNotMatch(html, /class="mark"/, "見出しの横の印は出さない（帯だけ）");
   // 新しい取得では出さない
   assert.equal(render(view()).includes('class="alert stale-note"'), false);
 });

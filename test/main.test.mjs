@@ -245,7 +245,7 @@ test("3時間超〜24時間以内のキャッシュがあっても、取得に�
   const ng = await prepare(t, {});
   await writeFile(path.join(ng.dir, ".cache", "weather-130000.json"), JSON.stringify(cache));
   const r2 = await go(ng.file, { [FORECAST_URL("130000")]: new TypeError("fetch failed") });
-  assert.match(r2.html, /<p class="mark">前回取得分<\/p>/);
+  assert.match(r2.html, /<div class="alert stale-note"><p>前回取得分：2026-11-11 05:00 発表の予報です。/);
   assert.ok(paragraphs(r2.html).some((p) => p.startsWith("発表：気象庁（2026-11-11 05:00）。")));
 });
 
