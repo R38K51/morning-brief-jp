@@ -6,15 +6,26 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { render } from "../src/render.mjs";
 import { extractForecast } from "../src/weather/extract.mjs";
-import { jma1100 } from "../test/fixtures/jma.mjs";
+import { jma0500, jma1700 } from "../test/fixtures/jma.mjs";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const outDir = path.join(root, "out", "samples");
 const J = (s) => new Date(`${s}+09:00`);
 const NOW = J("2026-11-11T06:12:00");
 
-const ex = extractForecast(jma1100(), { areaName: "東京地方", tempPointName: "東京", today: "2026-11-11" });
+// 時刻の順は「発表 ≤ 取得 ≤ 作成」にそろえる（ありえない時刻を見本に出さない）。
+// 新しい取得：発表 11-11 05:00、取得と作成 11-11 06:12。
+const wx0500 = jma0500();
+wx0500[0].timeSeries[1].areas[0].pops = ["10", "0", "20", "30", "40", "50", "30"];
+const ex = extractForecast(wx0500, { areaName: "東京地方", tempPointName: "東京", today: "2026-11-11" });
 const fresh = { state: "fresh", areaCode: "130000", failedAt: null, failReason: null, fetchedAt: J("2026-11-11T06:12:00"), ...ex };
+
+// 前回取得分：発表 11-10 17:00、取得 11-10 18:20、作成 11-11 06:12（17:00 発表の形を1日前にずらす）。
+const shiftDayBack = (v) => JSON.parse(JSON.stringify(v).replace(/2026-11-(\d{2})T/g, (_, d) => `2026-11-${String(Number(d) - 1).padStart(2, "0")}T`));
+const wx1700 = shiftDayBack(jma1700());
+wx1700[0].timeSeries[2].areas[0].temps = ["8", "17"];
+const exStale = extractForecast(wx1700, { areaName: "東京地方", tempPointName: "東京", today: "2026-11-11" });
+const stale = { state: "stale", areaCode: "130000", failedAt: null, failReason: null, fetchedAt: J("2026-11-10T18:20:00"), ...exStale };
 
 const schedule = {
   state: "ok",
@@ -51,8 +62,16 @@ const samples = {
   "weather-only": { ...base, weather: fresh },
   full: { ...base, weather: fresh, schedule, news },
   "weather-failed": { ...base, weather: { state: "failed", failReason: "error", areaCode: "130000", failedAt: NOW, fetchedAt: null, office: null, reportDatetime: null, areaName: null, tempPointName: null, days: [] }, schedule, news },
-  "weather-stale": { ...base, weather: { ...fresh, state: "stale", fetchedAt: J("2026-11-10T18:20:00") }, schedule },
+  "weather-stale": { ...base, weather: stale, schedule },
 };
+
+// 見本の時刻の矛盾を防ぐ（発表 ≤ 取得 ≤ 作成）
+for (const [name, view] of Object.entries(samples)) {
+  const w = view.weather;
+  if (w.state === "failed") continue;
+  const report = Date.parse(w.reportDatetime);
+  if (!(report <= w.fetchedAt.getTime() && w.fetchedAt.getTime() <= view.createdAt.getTime())) throw new Error(`見本の時刻の順が不自然です：${name}`);
+}
 
 await mkdir(outDir, { recursive: true });
 for (const [name, view] of Object.entries(samples)) {
