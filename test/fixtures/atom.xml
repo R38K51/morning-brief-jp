@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="utf-8"?>
+<feed xmlns="http://www.w3.org/2005/Atom">
+  <title>例のフィード（Atom）</title>
+  <id>urn:example:feed</id>
+  <updated>2026-11-11T05:00:00Z</updated>
+  <entry>
+    <title type="html">Atom の見本の見出し</title>
+    <link rel="self" href="https://example.com/self/1"/>
+    <link rel="alternate" href="https://example.com/atom/1"/>
+    <id>urn:example:1</id>
+    <published>2026-11-10T21:30:00Z</published>
+    <updated>2026-11-10T22:00:00Z</updated>
+    <summary>Atom の見本の説明</summary>
+    <content type="html">本文は取らない</content>
+  </entry>
+  <entry>
+    <title>Atom の2件目</title>
+    <link href="https://example.com/atom/2"/>
+    <id>urn:example:2</id>
+    <updated>2026-11-10T10:00:00Z</updated>
+  </entry>
+</feed>
