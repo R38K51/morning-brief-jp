@@ -1,11 +1,16 @@
 :root {
   color-scheme: light dark;
   --bg: #F5F1E8;
-  --surface: #FBF9F4;
+  --surface: #FFFFFF;
+  --soft: #F3EEE2;
+  --blue: #2F5F8F;
+  --blue-bg: #E8F0F7;
+  --warm-bg: #FBEBE3;
+  --radius: 14px;
   --ink: #2B2823;
   --dim: #55504A;
   --faint: #6B675F;
-  --line: #D9D2C3;
+  --line: #DCD3C0;
   --accent: #B9532F;
   --accent-text: #A24626;
   --link: #2B2823;
@@ -42,11 +47,15 @@
 @media (prefers-color-scheme: dark) {
   :root {
     --bg: #1C1A17;
-    --surface: #24211D;
+    --surface: #25221E;
+    --soft: #2D2924;
+    --blue: #8DB9E3;
+    --blue-bg: #22313F;
+    --warm-bg: #3A2A22;
     --ink: #ECE6DA;
     --dim: #C4BDB0;
     --faint: #9A968C;
-    --line: #3A362F;
+    --line: #403B33;
     --accent: #D9774F;
     --accent-text: #EE9A74;
     --link: #ECE6DA;
@@ -86,56 +95,65 @@ a:focus-visible, summary:focus-visible { outline: var(--focus); outline-offset: 
 .page { max-width: var(--page-max); margin: 0 auto; padding: var(--sp-5) var(--page-pad) var(--sp-6); min-width: 0; }
 
 /* 日付 */
-.masthead { padding-bottom: var(--sp-3); border-bottom: var(--rule-strong); margin-bottom: var(--section-gap); }
-.masthead h1 { font-size: var(--fs-sm); color: var(--dim); font-weight: var(--fw-regular); }
-.masthead .year { font-size: var(--fs-sm); color: var(--dim); font-variant-numeric: tabular-nums; }
-.masthead .date { font-size: var(--fs-xl); line-height: 1.1; font-variant-numeric: tabular-nums; }
-.masthead .date .d { font-size: var(--fs-date); font-weight: var(--fw-strong); margin-left: 0.15em; }
+.masthead { display: flex; flex-wrap: wrap; justify-content: center; align-items: baseline; gap: 0 var(--sp-3); padding: var(--sp-3) var(--sp-5); background: var(--surface); border: 1px solid var(--line); border-top: 6px solid var(--accent); border-radius: var(--radius); margin-bottom: var(--sp-5); }
+.masthead h1, .masthead .year { font-size: var(--fs-sm); color: var(--dim); font-weight: var(--fw-regular); font-variant-numeric: tabular-nums; }
+.masthead .date { font-size: var(--fs-xl); line-height: 1.3; font-variant-numeric: tabular-nums; }
+.masthead .date .d { font-weight: var(--fw-strong); }
+
+/* 出典と加工の表示（フッター） */
+.credits p + p, footer .made { margin-top: var(--sp-1); }
+.credits .src-line { display: block; }
 
 /* 欄 */
 main { min-width: 0; }
-.col { min-width: 0; display: flex; flex-direction: column; gap: var(--section-gap); }
+main { display: flex; flex-direction: column; gap: var(--sp-5); }
+.duo { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--sp-5); align-items: start; }
 section { min-width: 0; }
-.col-news { margin-top: var(--section-gap); }
+main > section, .duo > section { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); padding: var(--sp-4); }
 .sec-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: var(--sp-2) var(--sp-3); padding-bottom: var(--sp-2); border-bottom: var(--rule); margin-bottom: var(--sp-4); }
 .sec-head h2 { font-size: var(--fs-lg); }
+.sec-head .area { color: var(--dim); font-size: var(--fs-sm); }
+.sec-head h2::before { content: var(--ico); content: var(--ico) / ""; margin-right: 0.4em; }
+.weather .sec-head { --ico: "🌤️"; }
+.schedule .sec-head { --ico: "📅"; }
+.news .sec-head { --ico: "📰"; }
 .alert { color: var(--accent-text); border-left: var(--rule-strong); padding-left: var(--sp-3); font-size: var(--fs-md); }
 .alert p + p { margin-top: var(--sp-1); }
 .stale-note { margin-bottom: var(--sp-4); }
 
 /* 天気 */
-.weather h3 { font-size: var(--fs-md); color: var(--dim); margin-bottom: var(--sp-3); }
-.days { display: grid; grid-template-columns: minmax(0, 1fr); gap: 0; }
-.day { min-width: 0; padding: var(--sp-3) 0 var(--sp-4); border-top: var(--rule); }
-.day:first-child { border-top: 0; padding-top: 0; }
-.day h4 { font-size: var(--fs-md); margin-bottom: var(--sp-2); font-variant-numeric: tabular-nums; }
+.days { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--sp-3); }
+.day { min-width: 0; padding: var(--sp-4); background: var(--soft); border: 1px solid var(--line); border-radius: 12px; }
+.day + .day { margin-top: var(--sp-3); }
+.day h3 { display: inline-block; font-size: var(--fs-sm); margin-bottom: var(--sp-2); padding: 0.1em 0.7em; background: var(--accent); color: #fff; border-radius: 999px; font-variant-numeric: tabular-nums; }
 .day-empty { color: var(--dim); margin-bottom: var(--sp-2); }
-.wx { font-size: var(--fs-lg); line-height: 1.5; margin-bottom: var(--sp-3); }
-.label { font-size: var(--fs-sm); color: var(--dim); margin: var(--sp-2) 0 var(--sp-1); }
-.grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(4.5rem, 1fr)); gap: var(--sp-3); }
-.grid > div { min-width: 0; }
+.wx { font-size: var(--fs-lg); line-height: 1.5; margin-bottom: var(--sp-3); padding-bottom: var(--sp-3); border-bottom: 1px dashed var(--line); }
+.label { font-size: var(--fs-sm); color: var(--dim); font-weight: var(--fw-strong); margin: var(--sp-3) 0 var(--sp-2); }
+.label::before { content: var(--ico); content: var(--ico) / ""; margin-right: 0.35em; }
+.label-pop { --ico: "💧"; }
+.label-temp { --ico: "🌡️"; }
+.grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(4.5rem, 1fr)); gap: var(--sp-2); }
+.grid > div { min-width: 0; padding: var(--sp-2) var(--sp-3); background: var(--surface); border: 1px solid var(--line); border-radius: 10px; }
 .grid dt { font-size: var(--fs-sm); color: var(--dim); font-variant-numeric: tabular-nums; }
-.grid dd { font-size: var(--fs-md); }
-.notes { margin-top: var(--sp-4); padding: var(--sp-3) var(--sp-3); background: var(--surface); border-top: var(--rule); font-size: var(--fs-xs); line-height: 1.5; color: var(--dim); }
-.notes p + p { margin-top: var(--sp-2); } /* 段落の間 8px */
-.notes .src-line { display: block; } /* 出典は1つずつ別の行 */
-.notes .src-line a { display: inline-flex; align-items: center; min-height: var(--tap-min); } /* 指で押せる高さ（44px）。文字は 12px のまま */
+.grid dd { font-size: var(--fs-md); font-weight: var(--fw-strong); }
+.pops { grid-template-columns: none; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); gap: var(--sp-1); } /* 時間帯は何枠でも1段 */
+.pops > div { padding: var(--sp-2) var(--sp-1); text-align: center; background: var(--blue-bg); border-color: transparent; }
+.pops dt { white-space: nowrap; }
+.pops dd { color: var(--blue); }
 
 /* 予定 */
-.events li { display: flex; gap: var(--sp-3); align-items: baseline; min-height: var(--tap-min); padding: var(--sp-2) 0; border-bottom: var(--rule); }
-.events li:last-child { border-bottom: 0; }
-.ev-time { flex: 0 0 6.5rem; color: var(--dim); }
+.events li { display: flex; gap: var(--sp-3); align-items: baseline; min-height: var(--tap-min); padding: var(--sp-2) var(--sp-3); margin-bottom: var(--sp-2); background: var(--soft); border-left: 4px solid var(--accent); border-radius: 8px; }
+.ev-time { flex: 0 0 6.5rem; color: var(--accent-text); font-weight: var(--fw-strong); }
 .ev-title { flex: 1 1 auto; min-width: 0; }
 .empty { color: var(--dim); }
 .schedule .alert { margin-top: var(--sp-3); }
 .schedule { max-width: var(--measure); }
 
 /* ニュース */
-.terms { font-size: var(--fs-sm); color: var(--dim); margin: calc(-1 * var(--sp-2)) 0 var(--sp-4); }
 .feeds { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--sp-6); }
 .feed { min-width: 0; }
-.feed h3 { font-size: var(--fs-md); color: var(--dim); padding-bottom: var(--sp-1); }
-.items li { padding: var(--sp-3) 0; border-bottom: var(--rule); min-height: var(--tap-min); }
+.feed h3 { font-size: var(--fs-md); color: var(--blue); padding-bottom: var(--sp-2); }
+.items li { padding: var(--sp-3); margin-bottom: var(--sp-2); background: var(--soft); border-radius: 10px; min-height: var(--tap-min); }
 .items a, .items .title { font-weight: var(--fw-strong); display: block; }
 .items a { display: flex; align-items: center; min-height: var(--tap-min); } /* 指で押せる高さ（44px）。1行の見出しでも */
 .items time { display: block; font-size: var(--fs-sm); color: var(--faint); margin-top: var(--sp-1); }
@@ -143,24 +161,42 @@ section { min-width: 0; }
 details > summary { min-height: var(--tap-min); display: flex; align-items: center; cursor: pointer; color: var(--ink); font-size: var(--fs-sm); text-decoration: underline; text-underline-offset: 0.18em; margin-top: var(--sp-2); }
 .feed .alert { margin-top: var(--sp-2); }
 
-footer { margin-top: var(--sp-7); padding-top: var(--sp-3); border-top: var(--rule); font-size: var(--fs-sm); color: var(--faint); font-variant-numeric: tabular-nums; }
+footer { margin-top: var(--sp-5); padding-top: var(--sp-3); font-size: var(--fs-xs); line-height: 1.5; color: var(--faint); font-variant-numeric: tabular-nums; }
 
 @media (min-width: 48rem) {
   :root { --page-pad: var(--sp-5); --page-max: 46rem; }
-  .days { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--sp-5); }
-  .day { border-top: 0; padding-top: 0; }
   .feeds { grid-template-columns: repeat(auto-fit, minmax(20rem, 1fr)); }
 }
 @media (min-width: 64rem) {
-  :root { --page-pad: var(--sp-6); --page-max: 70rem; --section-gap: var(--sp-7); }
-  .has-news main { display: grid; grid-template-columns: 26rem minmax(0, 1fr); gap: var(--sp-7); align-items: start; }
-  .has-news .col-news { margin-top: 0; }
-  .has-news .col-main .days { grid-template-columns: minmax(0, 1fr); gap: 0; }
-  .has-news .col-main .day + .day { border-top: var(--rule); padding-top: var(--sp-3); }
-  .no-news { --page-max: calc(var(--measure) + 2 * var(--page-pad)); }
+  :root { --page-pad: var(--sp-6); --page-max: 70rem; }
+  .duo-2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .duo > section { padding: var(--sp-5); }
+  .duo .sec-head h2 { font-size: var(--fs-xl); }
+  /* 天気は低く：見出し、2日分の1行、注記を詰める */
+  .weather { padding: var(--sp-3) var(--sp-4) !important; }
+  .weather .sec-head { margin-bottom: var(--sp-2); padding-bottom: var(--sp-1); }
+  .weather .days { gap: var(--sp-2); }
+  .weather .day { padding: var(--sp-1) var(--sp-3); }
+  .weather .day + .day { margin-top: 0; }
+  .weather .grid > div { padding: 0.1rem var(--sp-2); display: flex; gap: var(--sp-2); align-items: baseline; }
+  .weather .pops > div { padding: 0.1rem var(--sp-2); }
+  .weather .pops { gap: var(--sp-1); }
+  .weather .day { gap: var(--sp-1) var(--sp-3); }
+  .weather .day .wx { flex: 1 1 8rem; font-size: var(--fs-lg); }
+  .weather .grid > div { padding: 0.1rem var(--sp-2); }
+  /* 天気は横長：今日と明日を横に並べ、1日分は1行にまとめる */
+  .weather .day { display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-2) var(--sp-4); }
+  .weather .day h3 { margin: 0; }
+  .weather .day .wx { margin: 0; padding: 0; border: 0; flex: 1 1 14rem; }
+  .weather .day .label { margin: 0; }
+  .weather .day .grid { grid-auto-flow: column; grid-template-columns: none; gap: var(--sp-1); }
+  .weather .day-empty { flex: 1 1 100%; }
 }
 @media (min-width: 85rem) {
   :root { --page-max: 75rem; }
+  .weather .day { flex-wrap: nowrap; }
+  .weather .day .wx { min-width: 0; }
+  .weather .day h3, .weather .day .label, .weather .day .grid { flex: none; white-space: nowrap; }
 }
 @media (min-width: 120rem) {
   :root { --page-max: 80rem; }

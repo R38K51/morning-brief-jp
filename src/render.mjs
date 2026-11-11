@@ -10,7 +10,7 @@ const CSS = readFileSync(new URL("./style.css", import.meta.url), "utf8");
 export const TEXT = {
   pageTitle: "朝のまとめ",
   skip: "本文へ移動",
-  weatherHeading: "天気（気象庁の発表）",
+  weatherHeading: "天気",
   pop: "降水確率",
   min: "最低",
   max: "最高",
@@ -24,10 +24,6 @@ export const TEXT = {
   // 発表が今日のとき（今日の 05:00 発表を昼に前回取得分で出すなど）は、事実と合わない2文目を付けない
   staleNote: (report, reportIsToday) => `前回取得分：${report} 発表の予報です。${reportIsToday ? "" : "今日の発表ではありません。"}`,
   dayNotIncluded: (report, label) => `この発表（${report}）に、${label}の項目は含まれていません。`,
-  noteReport: (office, report) =>
-    `発表：${office}（${report}）。気象庁の天気予報を、文言と数値を変えずに表示しています。項目の抜き出し、並べ方、日付と時間帯の書き方は morning-brief-jp が行っています。`,
-  noteFetched: (t) => `取得：${t}。最新の情報は気象庁ホームページで確かめてください。表示の遅れや誤りについて、作者は責任を負いません。`,
-  noteIndependent: "このツールは気象庁とは関係のない個人の作品です。",
   sourceJmaUrl: (code) => `https://www.jma.go.jp/bosai/forecast/#area_type=offices&area_code=${code}`,
   sourcePdlUrl: "https://www.digital.go.jp/resources/open_data/public_data_license_v1.0",
   noteProcessed: "気象庁ホームページの天気予報をもとに morning-brief-jp が作成（文言と数値は変更していません）",
@@ -38,7 +34,6 @@ export const TEXT = {
   schedulePartial: "一部の予定を読めませんでした。",
   untitled: "（題名なし）",
   newsHeading: "ニュース",
-  newsTerms: "見出しと説明は各サイトのものです。利用条件は各サイトで確かめてください。",
   feedEmpty: "前日6時以降の新しい記事はありません。",
   feedFailed: "取得できませんでした。フィードの URL を確かめてください。",
   more: (n) => `残り${n}件を見る`,
@@ -74,18 +69,18 @@ function dayAllEmpty(day) {
   return isEmpty(day.weather) && day.pops.every((p) => isEmpty(p.value)) && isEmpty(day.tempMin) && isEmpty(day.tempMax);
 }
 
-function renderDay(day, tempPointName, report) {
+function renderDay(day, report) {
   const notIncluded = day.label && dayAllEmpty(day) ? `<p class="day-empty">${esc(TEXT.dayNotIncluded(report, day.label))}</p>\n` : "";
   const pops = day.pops.length
-    ? `<dl class="grid">${day.pops.map((p) => `<div><dt>${esc(popLabel(p))}</dt><dd>${esc(valueOrNone(p.value, "%"))}</dd></div>`).join("")}</dl>`
+    ? `<dl class="grid pops">${day.pops.map((p) => `<div><dt>${esc(popLabel(p))}</dt><dd>${esc(valueOrNone(p.value, "%"))}</dd></div>`).join("")}</dl>`
     : `<p>${esc(TEXT.none)}</p>`;
-  const tempLabel = tempPointName ? `気温（${tempPointName}）` : "気温";
+  const tempLabel = "気温";
   return `<article class="day">
-<h4>${esc(dayHeading(day))}</h4>
+<h3>${esc(dayHeading(day))}</h3>
 ${notIncluded}<p class="wx">${esc(day.weather ?? TEXT.none)}</p>
-<p class="label">${esc(TEXT.pop)}</p>
+<p class="label label-pop">${esc(TEXT.pop)}</p>
 ${pops}
-<p class="label">${esc(tempLabel)}</p>
+<p class="label label-temp">${esc(tempLabel)}</p>
 <dl class="grid"><div><dt>${esc(TEXT.min)}</dt><dd>${esc(valueOrNone(day.tempMin, "℃"))}</dd></div><div><dt>${esc(TEXT.max)}</dt><dd>${esc(valueOrNone(day.tempMax, "℃"))}</dd></div></dl>
 </article>`;
 }
@@ -105,9 +100,9 @@ function reportText(reportDatetime) {
 
 export function renderWeather(w, { now, timezone }) {
   // 前回取得分は見出しの下の帯（staleNote）だけで示す。見出し横の印は二重表示になるため出さない（2026-11-11 再確認2）
-  const head = `<div class="sec-head"><h2 id="h-weather">${esc(TEXT.weatherHeading)}</h2></div>`;
+  const area = w.state !== "failed" && w.areaName ? `<span class="area">${esc(w.areaName)}</span>` : "";
+  const head = `<div class="sec-head"><h2 id="h-weather">${esc(TEXT.weatherHeading)}</h2>${area}</div>`;
   let body;
-  const notes = [];
   if (w.state === "failed") {
     const cause = w.failReason === "limit" ? null : causeText(w.failCause);
     body =
@@ -118,26 +113,22 @@ export function renderWeather(w, { now, timezone }) {
     const report = reportText(w.reportDatetime);
     const reportIsToday = jmaLocalParts(w.reportDatetime)?.date === ymd(now, timezone);
     const staleNote = w.state === "stale" ? `<div class="alert stale-note"><p>${esc(TEXT.staleNote(report, reportIsToday))}</p></div>\n` : "";
-    body = `${staleNote}<h3>${esc(w.areaName ?? "")}</h3>
-<div class="days">
-${w.days.map((d) => renderDay(d, w.tempPointName, report)).join("\n")}
+    body = `${staleNote}<div class="days">
+${w.days.map((d) => renderDay(d, report)).join("\n")}
 </div>`;
-    notes.push(`<p>${brand(esc(TEXT.noteReport(w.office ?? "", reportText(w.reportDatetime))))}</p>`);
-    notes.push(`<p>${esc(TEXT.noteFetched(formatHMWithDate(w.fetchedAt, now, timezone)))}</p>`);
   }
-  notes.push(`<p>${esc(TEXT.noteIndependent)}</p>`);
-  // 出典は1つずつ別の行（.src-line）。文字は1字も変えず、改行は CSS だけで行う（段落の文字は今までと同じ）
-  notes.push(
-    `<p class="source">出典：<span class="src-line">気象庁ホームページ（${link(TEXT.sourceJmaUrl(w.areaCode), TEXT.sourceJmaUrl(w.areaCode))}）、</span><span class="src-line">公共データ利用規約（第1.0版）（${link(TEXT.sourcePdlUrl, TEXT.sourcePdlUrl)}）</span></p>`,
-  );
-  notes.push(`<p>${brand(esc(TEXT.noteProcessed))}</p>`);
   return `<section class="weather" aria-labelledby="h-weather">
 ${head}
 ${body}
-<div class="notes">
-${notes.join("\n")}
-</div>
 </section>`;
+}
+
+/** 出典と加工の表示（気象庁の利用条件で必要）。画面の下、フッターに小さく出す。 */
+export function renderCredits(w) {
+  return `<div class="credits">
+<p class="source">出典：<span class="src-line">気象庁ホームページ（${link(TEXT.sourceJmaUrl(w.areaCode), TEXT.sourceJmaUrl(w.areaCode))}）、</span><span class="src-line">公共データ利用規約（第1.0版）（${link(TEXT.sourcePdlUrl, TEXT.sourcePdlUrl)}）</span></p>
+<p>${brand(esc(TEXT.noteProcessed))}</p>
+</div>`;
 }
 
 function eventTime(ev, timezone) {
@@ -189,7 +180,6 @@ export function renderNews(news, { now, timezone, visibleItemsPerFeed }) {
     .join("\n");
   return `<section class="news" aria-labelledby="h-news">
 <div class="sec-head"><h2 id="h-news">${esc(TEXT.newsHeading)}</h2></div>
-<p class="terms">${esc(TEXT.newsTerms)}</p>
 <div class="feeds">
 ${feeds}
 </div>
@@ -204,7 +194,10 @@ export function render(view) {
   const hasNews = Boolean(view.news);
   const ctx = { now: createdAt, timezone, visibleItemsPerFeed: view.visibleItemsPerFeed ?? 4 };
 
-  const main = [renderWeather(view.weather, ctx), view.schedule ? renderSchedule(view.schedule, ctx) : ""].filter(Boolean).join("\n");
+  const weather = renderWeather(view.weather, ctx);
+  const duoParts = [view.schedule ? renderSchedule(view.schedule, ctx) : "", hasNews ? renderNews(view.news, ctx) : ""].filter(Boolean);
+  const duo = duoParts.length ? `<div class="duo duo-${duoParts.length}">\n${duoParts.join("\n")}\n</div>` : "";
+  const main = [weather, duo].filter(Boolean).join("\n");
   const created = `${today} ${formatHM(createdAt, timezone)}`;
 
   return `<!doctype html>
@@ -232,12 +225,12 @@ ${CSS}
 <p class="date"><span>${p.month}月</span><span class="d">${p.day}</span><span>日（${esc(p.weekday)}）</span></p>
 </header>
 <main id="main">
-<div class="col col-main">
 ${main}
-</div>
-${hasNews ? `<div class="col col-news">\n${renderNews(view.news, ctx)}\n</div>` : ""}
 </main>
-<footer>${brand(esc(TEXT.footer(view.version, created)))}</footer>
+<footer>
+${renderCredits(view.weather)}
+<p class="made">${brand(esc(TEXT.footer(view.version, created)))}</p>
+</footer>
 </div>
 </body>
 </html>

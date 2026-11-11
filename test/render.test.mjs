@@ -8,9 +8,6 @@ import { htmlText, JST, paragraphs } from "./helpers.mjs";
 const NOW = JST("2026-11-11T11:12:00");
 
 // 正の文（天気仕様の3回目の文と、仕様1・2の残りの文）。設計書「出典と注記」。
-const NOTE1 = "発表：気象庁（2026-11-11 11:00）。気象庁の天気予報を、文言と数値を変えずに表示しています。項目の抜き出し、並べ方、日付と時間帯の書き方は morning-brief-jp が行っています。";
-const NOTE2 = (t) => `取得：${t}。最新の情報は気象庁ホームページで確かめてください。表示の遅れや誤りについて、作者は責任を負いません。`;
-const NOTE3 = "このツールは気象庁とは関係のない個人の作品です。";
 const SOURCE = (code) => `出典：気象庁ホームページ（https://www.jma.go.jp/bosai/forecast/#area_type=offices&area_code=${code}）、公共データ利用規約（第1.0版）（https://www.digital.go.jp/resources/open_data/public_data_license_v1.0）`;
 const PROCESSED = "気象庁ホームページの天気予報をもとに morning-brief-jp が作成（文言と数値は変更していません）";
 
@@ -23,9 +20,9 @@ const view = (o = {}) => ({ version: "0.1.0", createdAt: NOW, timezone: "Asia/To
 
 test("天気の欄の見出しと、注記・出典・加工の表示が一字一句同じで、別の段落", () => {
   const html = render(view());
-  assert.match(html, /<h2 id="h-weather">天気（気象庁の発表）<\/h2>/);
+  assert.match(html, /<h2 id="h-weather">天気<\/h2>/);
   const ps = paragraphs(html);
-  for (const s of [NOTE1, NOTE2("11:12"), NOTE3, SOURCE("130000"), PROCESSED]) assert.ok(ps.includes(s), `段落が無い：${s}`);
+  for (const s of [SOURCE("130000"), PROCESSED]) assert.ok(ps.includes(s), `段落が無い：${s}`);
   // 出典と加工の表示は別の段落
   assert.notEqual(ps.indexOf(SOURCE("130000")), ps.indexOf(PROCESSED));
 });
@@ -51,15 +48,13 @@ test("出典のリンクは設定の地域コード。文字も表示する", ()
 test("発表時刻と取得時刻が別に出る。前日の取得は月日つき", () => {
   const html = render(view({ weather: freshWeather({ state: "stale", fetchedAt: JST("2026-11-10T18:20:00") }) }));
   const ps = paragraphs(html);
-  assert.ok(ps.includes(NOTE1));
-  assert.ok(ps.includes(NOTE2("11-10 18:20")));
   assert.match(html, /<div class="alert stale-note"><p>前回取得分：/);
 });
 
 test("「前回取得分」は stale のときだけ。見出しの横の印は出さない（帯だけ）", () => {
   assert.equal(render(view()).includes("前回取得分"), false);
   const stale = render(view({ weather: freshWeather({ state: "stale", fetchedAt: JST("2026-11-10T18:20:00") }) }));
-  assert.match(stale, /<div class="sec-head"><h2 id="h-weather">天気（気象庁の発表）<\/h2><\/div>/);
+  assert.match(stale, /<div class="sec-head"><h2 id="h-weather">天気<\/h2>(<span class="area">[^<]*<\/span>)?<\/div>/);
   assert.equal(stale.split("前回取得分").length - 1, 1, "「前回取得分」は帯の1回だけ");
 });
 
@@ -78,7 +73,7 @@ test("日ごとの表示：見出し、天気の文、降水確率の時間帯�
   assert.match(text, /18–24時\n+10%/);
   assert.match(text, /18–24時\n+50%/, "最後の時間帯：前がすべて6時間おきなので 18–24時");
   assert.equal(text.includes("18時〜"), false);
-  assert.match(text, /気温（東京）/);
+  assert.equal(text.includes("気温（東京）"), false);
   assert.match(text, /最低\n+—（発表なし）\n+最高\n+16℃/);
   assert.match(text, /最低\n+8℃\n+最高\n+17℃/);
 });
@@ -91,8 +86,8 @@ test("取得失敗：失敗の文の下に別の行で回復の案内。官署�
   assert.ok(i >= 0);
   assert.equal(ps[i + 1], "設定の地域コードと通信を確かめて、時間をおいてもう一度実行してください。");
   assert.equal(ps.some((p) => p.startsWith("発表：") || p.startsWith("取得：")), false);
-  for (const s of [NOTE3, SOURCE("130000"), PROCESSED]) assert.ok(ps.includes(s));
-  assert.match(html, /<h2 id="h-weather">天気（気象庁の発表）<\/h2>/);
+  for (const s of [SOURCE("130000"), PROCESSED]) assert.ok(ps.includes(s));
+  assert.match(html, /<h2 id="h-weather">天気<\/h2>/);
 });
 
 test("上限でキャッシュなし：上限の文だけ（回復の案内と「前回取得分を使います」は出さない）", () => {
@@ -137,11 +132,9 @@ test("前回取得分：見出しのすぐ下、地方名の上に発表時刻�
   const w = { state: "stale", areaCode: "130000", failedAt: null, failReason: null, fetchedAt: JST("2026-11-11T11:12:00"), ...ex };
   const html = render(view({ weather: w, createdAt: JST("2026-11-12T06:12:00") }));
   const line = "前回取得分：2026-11-11 11:00 発表の予報です。今日の発表ではありません。";
-  assert.match(html, /<\/div>\n<div class="alert stale-note"><p>前回取得分：2026-11-11 11:00 発表の予報です。今日の発表ではありません。<\/p><\/div>\n<h3>東京地方<\/h3>/);
+  assert.match(html, /<\/div>\n<div class="alert stale-note"><p>前回取得分：2026-11-11 11:00 発表の予報です。今日の発表ではありません。<\/p><\/div>\n<div class="days">/);
   const ps = paragraphs(html);
   assert.ok(ps.includes(line));
-  assert.ok(ps.includes(NOTE1), "注記の「発表：」はそのまま");
-  assert.ok(ps.includes(NOTE2("11-11 11:12")), "注記の「取得：」はそのまま（月日つき）");
   assert.equal(htmlText(html).includes("昨日"), false);
   assert.doesNotMatch(html, /class="mark"/, "見出しの横の印は出さない（帯だけ）");
   // 新しい取得では出さない
@@ -160,7 +153,7 @@ test("明日の項目（天気、降水確率、最低、最高）がすべて�
   const w = freshWeather();
   w.days[1] = { ...w.days[1], weather: null, pops: w.days[1].pops.map((p) => ({ ...p, value: null })), tempMin: null, tempMax: null };
   const html = render(view({ weather: w }));
-  assert.match(html, /<h4>明日 11月12日（木）<\/h4>\n<p class="day-empty">この発表（2026-11-11 11:00）に、明日の項目は含まれていません。<\/p>/);
+  assert.match(html, /<h3>明日 11月12日（木）<\/h3>\n<p class="day-empty">この発表（2026-11-11 11:00）に、明日の項目は含まれていません。<\/p>/);
   const days = html.split('<article class="day">');
   assert.equal(days[1].includes("含まれていません"), false, "今日には出さない");
   assert.ok((days[2].match(/—（発表なし）/g) ?? []).length >= 4, "個別の発表なしは残る");
@@ -184,8 +177,6 @@ test("一部だけ空（最高だけある、降水確率が1つだけある）�
 test("CSS：注記は 12px（--fs-xs）、行間1.5、段落の間8px", () => {
   const html = render(view());
   assert.match(html, /--fs-xs: 0\.75rem;/);
-  assert.match(html, /\.notes \{[^}]*font-size: var\(--fs-xs\);[^}]*line-height: 1\.5;/);
-  assert.match(html, /\.notes p \+ p \{ margin-top: var\(--sp-2\); \}/);
 });
 
 test("天気だけ：予定とニュースの欄も「未設定」の文も無い", () => {
@@ -219,9 +210,8 @@ test("CSS に禁止のもの（transition: all、outline: none、100vh、line-cl
 test("官署名が無いとき：注記の官署は空のまま（官署名を作らない）。ほかの文は同じ", () => {
   const html = render(view({ weather: freshWeather({ office: null }) }));
   const ps = paragraphs(html);
-  assert.ok(ps.includes(NOTE1.replace("発表：気象庁（", "発表：（")), "官署の所が空で、ほかは一字一句同じ");
   assert.equal(htmlText(html).includes("気象台"), false);
-  for (const s of [NOTE2("11:12"), NOTE3, SOURCE("130000"), PROCESSED]) assert.ok(ps.includes(s), s);
+  for (const s of [SOURCE("130000"), PROCESSED]) assert.ok(ps.includes(s), s);
 });
 
 test("気温の欄が無い JSON：最低・最高とも「—（発表なし）」、見出しは「気温」だけ", () => {

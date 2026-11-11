@@ -44,7 +44,7 @@ test("地域コードだけの設定：天気の欄だけの HTML（予定とニ
   assert.equal(r.exitCode, 0);
   assert.equal(r.outputPath, path.join(dir, "out", "morning-brief.html"));
   const text = htmlText(r.html);
-  assert.match(text, /天気（気象庁の発表）/);
+  assert.match(text, /天気/);
   for (const s of ["今日の予定", "ニュース", "未設定"]) assert.equal(text.includes(s), false, s);
   assert.deepEqual(r.logs, ["気象庁から取得しています…", `朝のまとめを作りました：${r.outputPath}`, "欄：天気"]);
 });
@@ -57,11 +57,11 @@ test("3つの欄すべて：欄の順は天気 → 予定 → ニュース", asy
     { MORNING_BRIEF_ICAL_URL: SECRET_URL },
   );
   const text = htmlText(r.html);
-  const a = text.indexOf("天気（気象庁の発表）");
+  const a = text.indexOf("天気");
   const b = text.indexOf("今日の予定");
   const c = text.indexOf("ニュース\n");
   assert.ok(a >= 0 && a < b && b < c);
-  assert.ok(paragraphs(r.html).includes("見出しと説明は各サイトのものです。利用条件は各サイトで確かめてください。"));
+  assert.equal(r.html.includes("利用条件は各サイトで"), false);
   assert.match(text, /会議の例/);
   assert.match(text, /Atom の見本の見出し/);
   assert.ok(r.logs.includes("ニュースを取得しています…（2件のフィード）"));
@@ -239,14 +239,11 @@ test("3時間超〜24時間以内のキャッシュがあっても、取得に�
   assert.equal(r.html.includes("前回取得分"), false);
   assert.doesNotMatch(r.html, /class="mark"/);
   const ps = paragraphs(r.html);
-  assert.ok(ps.some((p) => p.startsWith("発表：気象庁（2026-11-11 11:00）。")));
-  assert.ok(ps.some((p) => p.startsWith("取得：11:12。")));
   // 比べるため：同じキャッシュで取得に失敗したら印が出る
   const ng = await prepare(t, {});
   await writeFile(path.join(ng.dir, ".cache", "weather-130000.json"), JSON.stringify(cache));
   const r2 = await go(ng.file, { [FORECAST_URL("130000")]: new TypeError("fetch failed") });
   assert.match(r2.html, /<div class="alert stale-note"><p>前回取得分：2026-11-11 05:00 発表の予報です。/);
-  assert.ok(paragraphs(r2.html).some((p) => p.startsWith("発表：気象庁（2026-11-11 05:00）。")));
 });
 
 test("設定の誤り：形の違う地域コードと配列の設定は、原因に合う文言で終了コード 1", async (t) => {
