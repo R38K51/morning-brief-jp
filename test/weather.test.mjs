@@ -43,8 +43,9 @@ test("新しく取得：fresh、キャッシュと回数の記録を書く", asy
   assert.equal(f.calls.length, 1, "1回の実行で予報の JSON は1本だけ");
   const saved = JSON.parse(await readFile(path.join(cacheDir, "weather-130000.json"), "utf8"));
   assert.equal(saved.reportDatetime, "2026-11-11T11:00:00+09:00");
-  const reqs = JSON.parse(await readFile(path.join(cacheDir, "jma-requests.json"), "utf8")).requests;
-  assert.equal(reqs.length, 1);
+  const log = JSON.parse(await readFile(path.join(cacheDir, "jma-requests.json"), "utf8"));
+  assert.equal(log.requests.length, 1);
+  assert.equal(log.sends.length, 1);
 });
 
 test("3時間以内のキャッシュがあれば取りに行かない（印なし）", async (t) => {
@@ -114,18 +115,94 @@ test("上限で24時間以内のキャッシュあり：前回取得分を使う
   assert.deepEqual(logs, [WEATHER_MESSAGES.limitWithCache]);
 });
 
-test("残りが1回なら再試行しない（再試行も1回に数える）", async (t) => {
+const readLog = async (cacheDir) => JSON.parse(await readFile(path.join(cacheDir, "jma-requests.json"), "utf8"));
+
+test("残りが1回でも再試行する（再試行は同じ取得の一部で、枠は1つだけ使う）", async (t) => {
   const d = await tempDir();
   t.after(d.cleanup);
   const reqs = ["06:00", "09:00", "12:00"].map((h) => JST(`2026-11-11T${h}:00`).toISOString());
   const cacheDir = await setup(d, { requests: reqs });
   const f = fakeFetch({ [FORECAST_URL("130000")]: { status: 503, body: "" } });
   const { w, sleep } = await call(cacheDir, JST("2026-11-11T19:00:00"), f);
-  assert.equal(f.calls.length, 1);
-  assert.deepEqual(sleep.waits, []);
+  assert.equal(f.calls.length, 2);
+  assert.deepEqual(sleep.waits, [60_000]);
   assert.equal(w.state, "failed");
-  const saved = JSON.parse(await readFile(path.join(cacheDir, "jma-requests.json"), "utf8")).requests;
-  assert.equal(saved.length, 4);
+  const log = await readLog(cacheDir);
+  assert.equal(log.requests.length, 4, "枠は1つだけ使う");
+  assert.equal(log.sends.length, 2, "実際の送信は2件として別に残す");
+});
+
+test("失敗の枠：予報の取得失敗1回（再試行込み）は枠を1つだけ使い、送信は2件と記録", async (t) => {
+  const d = await tempDir();
+  t.after(d.cleanup);
+  const cacheDir = await setup(d);
+  const f = fakeFetch({ [FORECAST_URL("130000")]: new TypeError("fetch failed") });
+  const { w } = await call(cacheDir, JST("2026-11-11T06:12:00"), f);
+  assert.equal(w.state, "failed");
+  assert.equal(f.calls.length, 2);
+  const log = await readLog(cacheDir);
+  assert.equal(log.requests.length, 1);
+  assert.equal(log.sends.length, 2);
+});
+
+test("失敗の枠：初回（area.json あり）に失敗しても、1実行で使う枠は2まで（送信は3件と記録）", async (t) => {
+  const d = await tempDir();
+  t.after(d.cleanup);
+  const cacheDir = await setup(d, { area: false });
+  const f = fakeFetch({ [AREA_URL]: { body: areaJson() }, [FORECAST_URL("130000")]: { status: 500, body: "" } });
+  const { w } = await call(cacheDir, JST("2026-11-11T06:12:00"), f);
+  assert.equal(w.state, "failed");
+  assert.deepEqual(f.calls.map((c) => c.url), [AREA_URL, FORECAST_URL("130000"), FORECAST_URL("130000")]);
+  const log = await readLog(cacheDir);
+  assert.equal(log.requests.length, 2, "area.json 1 ＋ 予報 1（再試行込み）");
+  assert.equal(log.sends.length, 3);
+});
+
+test("失敗の枠：失敗の実行を続けると、3回目の実行で4回の枠を使い切り（初回は area.json の分で2）、4回目は取りに行かない", async (t) => {
+  const d = await tempDir();
+  t.after(d.cleanup);
+  const cacheDir = await setup(d, { area: false });
+  const f = fakeFetch({ [AREA_URL]: { body: areaJson() }, [FORECAST_URL("130000")]: new TypeError("fetch failed") });
+  const counts = [];
+  for (const h of ["06:12", "07:12", "08:12", "09:12"]) {
+    const { w, logs } = await call(cacheDir, JST(`2026-11-11T${h}:00`), f);
+    const log = await readLog(cacheDir);
+    counts.push([w.failReason, log.requests.length, log.sends.length, logs.at(-1)]);
+  }
+  assert.deepEqual(counts, [
+    ["error", 2, 3, WEATHER_MESSAGES.failed], // area.json と予報（再試行込み）
+    ["error", 3, 5, WEATHER_MESSAGES.failed],
+    ["error", 4, 7, WEATHER_MESSAGES.failed],
+    ["limit", 4, 7, WEATHER_MESSAGES.limitNoCache], // 4回目の実行は取りに行かない
+  ]);
+});
+
+test("送信の記録（sends）は枠の判断に使わない：sends が多くても requests が4未満なら取りに行く", async (t) => {
+  const d = await tempDir();
+  t.after(d.cleanup);
+  const cacheDir = await setup(d);
+  const at = (h) => JST(`2026-11-11T${h}:00`).toISOString();
+  await writeFile(path.join(cacheDir, "jma-requests.json"), JSON.stringify({ requests: [at("06:00"), at("09:00")], sends: ["06:00", "06:00", "09:00", "09:00", "09:00"].map(at) }));
+  const f = fakeFetch({ [FORECAST_URL("130000")]: { body: jma1100() } });
+  const { w } = await call(cacheDir, JST("2026-11-11T13:00:00"), f);
+  assert.equal(w.state, "fresh");
+  const log = await readLog(cacheDir);
+  assert.equal(log.requests.length, 3);
+  assert.equal(log.sends.length, 6);
+});
+
+test("キャッシュの3時間ちょうどは取りに行かず、1秒でも過ぎたら取りに行く", async (t) => {
+  const d = await tempDir();
+  t.after(d.cleanup);
+  const cacheDir = await setup(d, { cache: cacheOf(JST("2026-11-11T11:10:00")) });
+  const f = fakeFetch({ [FORECAST_URL("130000")]: { body: jma1100() } });
+  const exact = await call(cacheDir, JST("2026-11-11T14:10:00"), f);
+  assert.equal(exact.w.state, "fresh");
+  assert.equal(f.calls.length, 0, "3時間ちょうどはキャッシュ");
+  const over = await call(cacheDir, JST("2026-11-11T14:10:01"), f);
+  assert.equal(over.w.state, "fresh");
+  assert.equal(f.calls.length, 1, "3時間を過ぎたら取りに行く");
+  assert.equal(over.w.fetchedAt.toISOString(), JST("2026-11-11T14:10:01").toISOString());
 });
 
 test("404 は再試行せず、地域コードの文言", async (t) => {

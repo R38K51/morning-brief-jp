@@ -6,6 +6,7 @@ import { readFileSync } from "node:fs";
 const pkg = JSON.parse(readFileSync(new URL("../package.json", import.meta.url), "utf8"));
 
 export const VERSION = pkg.version;
+// R38K51 は公開先の組織名（企画書の決定）で、個人の名前ではない。公開先を変えるときは test/http.test.mjs も合わせる。
 export const USER_AGENT = `morning-brief-jp/${pkg.version} (+https://github.com/R38K51/morning-brief-jp)`;
 export const TIMEOUT_MS = 10_000;
 export const MAX_BYTES = 5 * 1024 * 1024;
@@ -90,7 +91,7 @@ async function once(url, { fetchImpl, timeoutMs, maxBytes, userAgent }) {
 
 /**
  * URL を取得してバイト列を返す。
- * onAttempt は実際に送る直前に毎回呼ばれる（気象庁への回数の記録に使う）。
+ * onAttempt(i) は実際に送る直前に毎回呼ばれる（i は 0 が初回、1 が再試行。気象庁への記録に使う）。
  */
 export async function fetchBytes(url, opts = {}) {
   const {

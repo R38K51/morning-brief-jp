@@ -4,7 +4,7 @@ import { readFile, readdir, writeFile, mkdir } from "node:fs/promises";
 import path from "node:path";
 import { run } from "../src/main.mjs";
 import { FORECAST_URL } from "../src/weather/index.mjs";
-import { jma1100 } from "./fixtures/jma.mjs";
+import { jma0500, jma1100 } from "./fixtures/jma.mjs";
 import { fakeFetch, htmlText, JST, paragraphs, recordingSleep, tempDir, writeConfig } from "./helpers.mjs";
 
 const NOW = JST("2026-11-11T11:12:00");
@@ -225,4 +225,41 @@ test("出力は一時ファイルから名前を変えて書く（一時ファ�
   await go(file, { [FORECAST_URL("130000")]: { body: jma1100() } });
   const files = await readdir(path.join(dir, "out"));
   assert.deepEqual(files, ["morning-brief.html"]);
+});
+
+test("3時間超〜24時間以内のキャッシュがあっても、取得に成功したら印なし（HTML まで）。失敗なら印あり", async (t) => {
+  const cacheBody = jma0500();
+  const cache = { areaCode: "130000", fetchedAt: JST("2026-11-11T07:12:00").toISOString(), reportDatetime: cacheBody[0].reportDatetime, body: cacheBody };
+  // 成功：新しい発表（11:00）を出し、印「前回取得分」は無い
+  const ok = await prepare(t, {});
+  await writeFile(path.join(ok.dir, ".cache", "weather-130000.json"), JSON.stringify(cache));
+  const r = await go(ok.file, { [FORECAST_URL("130000")]: { body: jma1100() } });
+  assert.equal(r.calls.length, 1, "4時間前のキャッシュなので取りに行く");
+  assert.equal(r.view.weather.state, "fresh");
+  assert.equal(r.html.includes("前回取得分"), false);
+  assert.doesNotMatch(r.html, /class="mark"/);
+  const ps = paragraphs(r.html);
+  assert.ok(ps.some((p) => p.startsWith("発表：気象庁（2026-11-11 11:00）。")));
+  assert.ok(ps.some((p) => p.startsWith("取得：11:12。")));
+  // 比べるため：同じキャッシュで取得に失敗したら印が出る
+  const ng = await prepare(t, {});
+  await writeFile(path.join(ng.dir, ".cache", "weather-130000.json"), JSON.stringify(cache));
+  const r2 = await go(ng.file, { [FORECAST_URL("130000")]: new TypeError("fetch failed") });
+  assert.match(r2.html, /<p class="mark">前回取得分<\/p>/);
+  assert.ok(paragraphs(r2.html).some((p) => p.startsWith("発表：気象庁（2026-11-11 05:00）。")));
+});
+
+test("設定の誤り：形の違う地域コードと配列の設定は、原因に合う文言で終了コード 1", async (t) => {
+  const d = await tempDir();
+  t.after(d.cleanup);
+  const file = await writeConfig(d.dir, { weather: { areaCode: "abc" } });
+  const bad = await go(file, {});
+  assert.equal(bad.exitCode, 1);
+  assert.deepEqual(bad.logs, ["weather.areaCode の形が違います（abc）。6桁の数字で書いてください（東京都の例：130000）。"]);
+  assert.equal(bad.calls.length, 0);
+  await writeConfig(d.dir, "[]");
+  const arr = await go(file, {});
+  assert.equal(arr.exitCode, 1);
+  assert.deepEqual(arr.logs, ["config.json は { } で囲んだオブジェクトで書いてください（config.example.json の形）。"]);
+  assert.equal(arr.calls.length, 0);
 });

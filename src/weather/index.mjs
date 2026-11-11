@@ -44,12 +44,18 @@ export async function getWeather({ weather, cacheDir, timezone, now, fetchImpl, 
       cache = null;
     }
   }
+  // 記録は2つ。requests は1日4回の枠に数える取得（再試行は同じ取得の一部で、数えない）。
+  // sends は気象庁へ実際に送った数（再試行も1件ずつ）。sends は枠の判断には使わない。
   const logRaw = await readJson(logFile);
   let requests = requestsToday(logRaw?.requests, now, timezone);
+  let sends = requestsToday(logRaw?.sends, now, timezone);
 
-  const record = async () => {
-    requests = [...requests, now.toISOString()];
-    await writeJsonAtomic(logFile, { requests });
+  const save = () => writeJsonAtomic(logFile, { requests, sends });
+  // onAttempt(i)：i が 0（初回）なら枠を1つ使い、送信の記録も足す。i が 1（再試行）なら送信の記録だけ足す。
+  const record = async (i) => {
+    if (i === 0) requests = [...requests, now.toISOString()];
+    sends = [...sends, now.toISOString()];
+    await save();
   };
 
   const fromBody = (body, fetchedAt, state) => {
@@ -90,9 +96,9 @@ export async function getWeather({ weather, cacheDir, timezone, now, fetchImpl, 
         fetchImpl,
         sleep,
         retries: 0,
-        onAttempt: async () => {
-          budget -= 1;
-          await record();
+        onAttempt: async (i) => {
+          if (i === 0) budget -= 1;
+          await record(i);
         },
       });
       const offices = Object.keys(JSON.parse(r.text)?.offices ?? {});
@@ -122,7 +128,7 @@ export async function getWeather({ weather, cacheDir, timezone, now, fetchImpl, 
     const r = await fetchText(FORECAST_URL(areaCode), {
       fetchImpl,
       sleep,
-      retries: budget >= 2 ? 1 : 0, // 再試行も1回に数えるので、残りが1回なら再試行しない
+      retries: 1, // 再試行は同じ取得の一部（枠は1つだけ使う）。残りが1回でも再試行する
       retryDelayMs: JMA_RETRY_DELAY_MS,
       onAttempt: record,
     });

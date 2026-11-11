@@ -56,3 +56,11 @@ test("発表が24時間より古いかの判定", () => {
   assert.equal(isReportOld("2026-11-10T05:00:00+09:00", JST("2026-11-11T05:00:01")), true);
   assert.equal(isReportOld("2026-11-10T05:00:00+09:00", JST("2026-11-11T05:00:00")), false);
 });
+
+test("3時間の境目：ちょうど3時間はキャッシュ、1ミリ秒でも過ぎたら取りに行く", () => {
+  const cache = validateCache(cacheRaw(), "130000", JST("2026-11-11T09:10:00"));
+  const exact = JST("2026-11-11T09:10:00");
+  assert.equal(planWeather({ cache, requestCount: 0, now: exact }).kind, "use-cache");
+  const over = new Date(exact.getTime() + 1);
+  assert.equal(planWeather({ cache, requestCount: 0, now: over }).kind, "fetch");
+});
