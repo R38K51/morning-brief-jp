@@ -100,7 +100,36 @@ test("上限（4回）でキャッシュなし：取りに行かず、上限の�
   assert.equal(f.calls.length, 0);
   assert.equal(w.state, "failed");
   assert.equal(w.failReason, "limit");
+  assert.equal(w.failCause, null, "上限のときは原因を付けない");
   assert.deepEqual(logs, [WEATHER_MESSAGES.limitNoCache]);
+});
+
+// 失敗の原因（画面の「原因：」の1行）。キャッシュなしで失敗させる。
+for (const [name, handler, cause] of [
+  ["404 → 地域コード", { status: 404, body: "" }, { kind: "area-unknown", code: "130000" }],
+  ["つながらない → 接続", new TypeError("fetch failed"), { kind: "network" }],
+  ["503 → 想定外の応答（番号つき）", { status: 503, body: "" }, { kind: "unexpected", status: 503 }],
+  ["JSON が読めない → 想定外の応答（番号なし）", { status: 200, body: "<html>見本</html>" }, { kind: "unexpected", status: null }],
+]) {
+  test(`失敗の原因：${name}`, async (t) => {
+    const d = await tempDir();
+    t.after(d.cleanup);
+    const cacheDir = await setup(d);
+    const f = fakeFetch({ [FORECAST_URL("130000")]: handler });
+    const { w } = await call(cacheDir, JST("2026-11-11T07:00:00"), f);
+    assert.equal(w.state, "failed");
+    assert.equal(w.failReason, "error");
+    assert.deepEqual(w.failCause, cause);
+  });
+}
+
+test("失敗の原因：area.json の offices に無い地域コードも「地域コード」", async (t) => {
+  const d = await tempDir();
+  t.after(d.cleanup);
+  const cacheDir = await setup(d, { area: false });
+  const f = fakeFetch({ [AREA_URL]: { body: areaJson() } });
+  const w = await getWeather({ weather: { areaCode: "999999" }, cacheDir, timezone: "Asia/Tokyo", now: JST("2026-11-11T07:00:00"), fetchImpl: f, sleep: recordingSleep(), log: () => {} });
+  assert.deepEqual(w.failCause, { kind: "area-unknown", code: "999999" });
 });
 
 test("上限で24時間以内のキャッシュあり：前回取得分を使う文言", async (t) => {

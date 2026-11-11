@@ -67,7 +67,8 @@ test("日ごとの表示：見出し、天気の文、降水確率の時間帯�
   assert.match(text, /見本の天気　のち　見本/);
   assert.match(text, /12–18時\n+0%/);
   assert.match(text, /18–24時\n+10%/);
-  assert.match(text, /18時〜\n+50%/);
+  assert.match(text, /18–24時\n+50%/, "最後の時間帯：前がすべて6時間おきなので 18–24時");
+  assert.equal(text.includes("18時〜"), false);
   assert.match(text, /気温（東京）/);
   assert.match(text, /最低\n+—（発表なし）\n+最高\n+16℃/);
   assert.match(text, /最低\n+8℃\n+最高\n+17℃/);
@@ -92,6 +93,90 @@ test("上限でキャッシュなし：上限の文だけ（回復の案内と�
   assert.ok(ps.includes("本日の気象庁への取得回数の上限に達しました。天気の欄は取得できませんでした。"));
   assert.equal(html.includes("時間をおいてもう一度"), false);
   assert.equal(html.includes("前回取得分を使います"), false);
+});
+
+// 失敗画面の「原因：」の1行（既存の2行は変えず、その下に足す）
+const failedWith = (failCause, failReason = "error") => ({ state: "failed", failReason, failCause, areaCode: "130000", failedAt: JST("2026-11-11T06:12:00"), fetchedAt: null, office: null, reportDatetime: null, areaName: null, tempPointName: null, days: [] });
+const FAILED_LINES = ["気象庁のデータを取得できませんでした（06:12）", "設定の地域コードと通信を確かめて、時間をおいてもう一度実行してください。"];
+
+for (const [name, cause, line] of [
+  ["地域コードが気象庁にない（404）", { kind: "area-unknown", code: "999999" }, "原因：地域コード 999999 が気象庁のデータにありません。"],
+  ["接続できない", { kind: "network" }, "原因：気象庁のサーバーに接続できませんでした。"],
+  ["想定外の応答（HTTP 503）", { kind: "unexpected", status: 503 }, "原因：気象庁から想定外の応答がありました（HTTP 503）。"],
+  ["想定外の応答（番号なし：JSON が読めない）", { kind: "unexpected", status: null }, "原因：気象庁から想定外の応答がありました。"],
+]) {
+  test(`取得失敗の原因：${name}。既存の2行の下に1行`, () => {
+    const ps = paragraphs(render(view({ weather: failedWith(cause) })));
+    const i = ps.indexOf(FAILED_LINES[0]);
+    assert.ok(i >= 0);
+    assert.deepEqual(ps.slice(i, i + 3), [...FAILED_LINES, line]);
+    assert.equal(ps.filter((p) => p.startsWith("原因：")).length, 1);
+  });
+}
+
+test("取得失敗の原因：上限のときと、原因が分からないときは付けない", () => {
+  const limit = render(view({ weather: failedWith({ kind: "network" }, "limit") }));
+  assert.equal(htmlText(limit).includes("原因："), false);
+  const unknown = paragraphs(render(view({ weather: failedWith(null) })));
+  assert.equal(unknown.some((p) => p.startsWith("原因：")), false);
+  assert.ok(unknown.includes(FAILED_LINES[1]));
+});
+
+test("前回取得分：見出しのすぐ下、地方名の上に発表時刻つきの1行（「昨日」は使わない）。注記の発表・取得はそのまま", () => {
+  // 11-11 11:00 発表・11:12 取得のキャッシュを、翌朝 11-12 06:12 に前回取得分として出す
+  const ex = extractForecast(jma1100(), { areaName: "東京地方", tempPointName: "東京", today: "2026-11-12" });
+  const w = { state: "stale", areaCode: "130000", failedAt: null, failReason: null, fetchedAt: JST("2026-11-11T11:12:00"), ...ex };
+  const html = render(view({ weather: w, createdAt: JST("2026-11-12T06:12:00") }));
+  const line = "前回取得分：2026-11-11 11:00 発表の予報です。今日の発表ではありません。";
+  assert.match(html, /<\/div>\n<div class="alert stale-note"><p>前回取得分：2026-11-11 11:00 発表の予報です。今日の発表ではありません。<\/p><\/div>\n<h3>東京地方<\/h3>/);
+  const ps = paragraphs(html);
+  assert.ok(ps.includes(line));
+  assert.ok(ps.includes(NOTE1), "注記の「発表：」はそのまま");
+  assert.ok(ps.includes(NOTE2("11-11 11:12")), "注記の「取得：」はそのまま（月日つき）");
+  assert.equal(htmlText(html).includes("昨日"), false);
+  assert.match(html, /<p class="mark">前回取得分<\/p>/, "見出しの横の印も残す");
+  // 新しい取得では出さない
+  assert.equal(render(view()).includes('class="alert stale-note"'), false);
+});
+
+test("前回取得分：発表が今日（今日の 05:00 発表を昼に出す）なら「今日の発表ではありません。」は付けない", () => {
+  const ex = extractForecast(jma1100(), { areaName: "東京地方", tempPointName: "東京", today: "2026-11-11" });
+  const w = { state: "stale", areaCode: "130000", failedAt: null, failReason: null, fetchedAt: JST("2026-11-11T11:12:00"), ...ex };
+  const ps = paragraphs(render(view({ weather: w, createdAt: JST("2026-11-11T19:00:00") })));
+  assert.ok(ps.includes("前回取得分：2026-11-11 11:00 発表の予報です。"));
+  assert.equal(ps.some((p) => p.includes("今日の発表ではありません")), false);
+});
+
+test("明日の項目（天気、降水確率、最低、最高）がすべて空：日の見出しの下に「含まれていません」の1行。個別の「—（発表なし）」は残す", () => {
+  const w = freshWeather();
+  w.days[1] = { ...w.days[1], weather: null, pops: w.days[1].pops.map((p) => ({ ...p, value: null })), tempMin: null, tempMax: null };
+  const html = render(view({ weather: w }));
+  assert.match(html, /<h4>明日 11月12日（木）<\/h4>\n<p class="day-empty">この発表（2026-11-11 11:00）に、明日の項目は含まれていません。<\/p>/);
+  const days = html.split('<article class="day">');
+  assert.equal(days[1].includes("含まれていません"), false, "今日には出さない");
+  assert.ok((days[2].match(/—（発表なし）/g) ?? []).length >= 4, "個別の発表なしは残る");
+});
+
+test("今日の項目がすべて空：「今日」で同じ形の1行", () => {
+  const w = freshWeather();
+  w.days[0] = { ...w.days[0], weather: null, pops: w.days[0].pops.map((p) => ({ ...p, value: null })), tempMin: null, tempMax: null };
+  const ps = paragraphs(render(view({ weather: w })));
+  assert.ok(ps.includes("この発表（2026-11-11 11:00）に、今日の項目は含まれていません。"));
+  assert.equal(ps.filter((p) => p.includes("含まれていません")).length, 1);
+});
+
+test("一部だけ空（最高だけある、降水確率が1つだけある）なら「含まれていません」は出さない", () => {
+  const w = freshWeather();
+  w.days[1] = { ...w.days[1], weather: null, pops: w.days[1].pops.map((p) => ({ ...p, value: null })), tempMin: null };
+  w.days[0] = { ...w.days[0], weather: null, pops: [{ from: "18", to: "24", value: "10" }], tempMin: null, tempMax: null };
+  assert.equal(render(view({ weather: w })).includes("含まれていません"), false);
+});
+
+test("CSS：注記は 12px（--fs-xs）、行間1.5、段落の間8px", () => {
+  const html = render(view());
+  assert.match(html, /--fs-xs: 0\.75rem;/);
+  assert.match(html, /\.notes \{[^}]*font-size: var\(--fs-xs\);[^}]*line-height: 1\.5;/);
+  assert.match(html, /\.notes p \+ p \{ margin-top: var\(--sp-2\); \}/);
 });
 
 test("天気だけ：予定とニュースの欄も「未設定」の文も無い", () => {

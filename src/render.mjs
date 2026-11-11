@@ -19,6 +19,12 @@ export const TEXT = {
   weatherFailed: (hm) => `気象庁のデータを取得できませんでした（${hm}）`,
   weatherRecover: "設定の地域コードと通信を確かめて、時間をおいてもう一度実行してください。",
   weatherLimit: "本日の気象庁への取得回数の上限に達しました。天気の欄は取得できませんでした。",
+  causeAreaUnknown: (code) => `原因：地域コード ${code} が気象庁のデータにありません。`,
+  causeNetwork: "原因：気象庁のサーバーに接続できませんでした。",
+  causeUnexpected: (status) => (status ? `原因：気象庁から想定外の応答がありました（HTTP ${status}）。` : "原因：気象庁から想定外の応答がありました。"),
+  // 発表が今日のとき（今日の 05:00 発表を昼に前回取得分で出すなど）は、事実と合わない2文目を付けない
+  staleNote: (report, reportIsToday) => `前回取得分：${report} 発表の予報です。${reportIsToday ? "" : "今日の発表ではありません。"}`,
+  dayNotIncluded: (report, label) => `この発表（${report}）に、${label}の項目は含まれていません。`,
   noteReport: (office, report) =>
     `発表：${office}（${report}）。気象庁の天気予報を、文言と数値を変えずに表示しています。項目の抜き出し、並べ方、日付と時間帯の書き方は morning-brief-jp が行っています。`,
   noteFetched: (t) => `取得：${t}。最新の情報は気象庁ホームページで確かめてください。表示の遅れや誤りについて、作者は責任を負いません。`,
@@ -63,19 +69,34 @@ function popLabel(pop) {
 
 const valueOrNone = (v, unit = "") => (v === null || v === undefined ? TEXT.none : `${v}${unit}`);
 
-function renderDay(day, tempPointName) {
+/** 天気、降水確率、最低、最高がすべて空か（日の見出しの下に「含まれていません」の1行を出す条件）。 */
+const isEmpty = (v) => v === null || v === undefined;
+function dayAllEmpty(day) {
+  return isEmpty(day.weather) && day.pops.every((p) => isEmpty(p.value)) && isEmpty(day.tempMin) && isEmpty(day.tempMax);
+}
+
+function renderDay(day, tempPointName, report) {
+  const notIncluded = day.label && dayAllEmpty(day) ? `<p class="day-empty">${esc(TEXT.dayNotIncluded(report, day.label))}</p>\n` : "";
   const pops = day.pops.length
     ? `<dl class="grid">${day.pops.map((p) => `<div><dt>${esc(popLabel(p))}</dt><dd>${esc(valueOrNone(p.value, "%"))}</dd></div>`).join("")}</dl>`
     : `<p>${esc(TEXT.none)}</p>`;
   const tempLabel = tempPointName ? `気温（${tempPointName}）` : "気温";
   return `<article class="day">
 <h4>${esc(dayHeading(day))}</h4>
-<p class="wx">${esc(day.weather ?? TEXT.none)}</p>
+${notIncluded}<p class="wx">${esc(day.weather ?? TEXT.none)}</p>
 <p class="label">${esc(TEXT.pop)}</p>
 ${pops}
 <p class="label">${esc(tempLabel)}</p>
 <dl class="grid"><div><dt>${esc(TEXT.min)}</dt><dd>${esc(valueOrNone(day.tempMin, "℃"))}</dd></div><div><dt>${esc(TEXT.max)}</dt><dd>${esc(valueOrNone(day.tempMax, "℃"))}</dd></div></dl>
 </article>`;
+}
+
+function causeText(cause) {
+  if (!cause) return null;
+  if (cause.kind === "area-unknown") return TEXT.causeAreaUnknown(cause.code);
+  if (cause.kind === "network") return TEXT.causeNetwork;
+  if (cause.kind === "unexpected") return TEXT.causeUnexpected(cause.status);
+  return null;
 }
 
 function reportText(reportDatetime) {
@@ -88,14 +109,18 @@ export function renderWeather(w, { now, timezone }) {
   let body;
   const notes = [];
   if (w.state === "failed") {
+    const cause = w.failReason === "limit" ? null : causeText(w.failCause);
     body =
       w.failReason === "limit"
         ? `<div class="alert"><p>${esc(TEXT.weatherLimit)}</p></div>`
-        : `<div class="alert"><p>${esc(TEXT.weatherFailed(formatHM(w.failedAt, timezone)))}</p><p>${esc(TEXT.weatherRecover)}</p></div>`;
+        : `<div class="alert"><p>${esc(TEXT.weatherFailed(formatHM(w.failedAt, timezone)))}</p><p>${esc(TEXT.weatherRecover)}</p>${cause ? `<p class="cause">${esc(cause)}</p>` : ""}</div>`;
   } else {
-    body = `<h3>${esc(w.areaName ?? "")}</h3>
+    const report = reportText(w.reportDatetime);
+    const reportIsToday = jmaLocalParts(w.reportDatetime)?.date === ymd(now, timezone);
+    const staleNote = w.state === "stale" ? `<div class="alert stale-note"><p>${esc(TEXT.staleNote(report, reportIsToday))}</p></div>\n` : "";
+    body = `${staleNote}<h3>${esc(w.areaName ?? "")}</h3>
 <div class="days">
-${w.days.map((d) => renderDay(d, w.tempPointName)).join("\n")}
+${w.days.map((d) => renderDay(d, w.tempPointName, report)).join("\n")}
 </div>`;
     notes.push(`<p>${brand(esc(TEXT.noteReport(w.office ?? "", reportText(w.reportDatetime))))}</p>`);
     notes.push(`<p>${esc(TEXT.noteFetched(formatHMWithDate(w.fetchedAt, now, timezone)))}</p>`);

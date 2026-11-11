@@ -61,7 +61,7 @@ const base = { version: "0.1.0", createdAt: NOW, timezone: "Asia/Tokyo", schedul
 const samples = {
   "weather-only": { ...base, weather: fresh },
   full: { ...base, weather: fresh, schedule, news },
-  "weather-failed": { ...base, weather: { state: "failed", failReason: "error", areaCode: "130000", failedAt: NOW, fetchedAt: null, office: null, reportDatetime: null, areaName: null, tempPointName: null, days: [] }, schedule, news },
+  "weather-failed": { ...base, weather: { state: "failed", failReason: "error", failCause: { kind: "network" }, areaCode: "130000", failedAt: NOW, fetchedAt: null, office: null, reportDatetime: null, areaName: null, tempPointName: null, days: [] }, schedule, news },
   "weather-stale": { ...base, weather: stale, schedule },
 };
 

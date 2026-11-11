@@ -103,7 +103,7 @@ export async function run({ configPath, now = new Date(), fetchImpl = globalThis
   const weather =
     weatherR.status === "fulfilled"
       ? weatherR.value
-      : { state: "failed", failReason: "error", failedAt: now, areaCode: config.weather.areaCode, fetchedAt: null, office: null, reportDatetime: null, areaName: null, tempPointName: null, days: [] };
+      : { state: "failed", failReason: "error", failCause: null, failedAt: now, areaCode: config.weather.areaCode, fetchedAt: null, office: null, reportDatetime: null, areaName: null, tempPointName: null, days: [] };
   const schedule = scheduleR.status === "fulfilled" ? scheduleR.value : icalUrl ? { state: "failed", events: [], partial: false } : null;
   const feeds = feedRs.map((r, i) => (r.status === "fulfilled" ? r.value : { name: config.feeds[i].name, state: "failed", items: [] }));
   const news = feeds.length > 0 ? { feeds } : null;

@@ -25,13 +25,23 @@ function reportLabel(reportDatetime) {
   return p ? `${p.date} ${p.hm}` : String(reportDatetime);
 }
 
+/** 取得の失敗 → 画面の「原因：」の種類。404 は地域コード、つながらない（タイムアウトを含む）は接続、それ以外は想定外の応答。 */
+export function causeOf(e, areaUnknown) {
+  if (e instanceof FetchError) {
+    if (e.kind === "http" && e.status === 404) return areaUnknown;
+    if (e.kind === "network" || e.kind === "timeout") return { kind: "network" };
+    if (e.kind === "http") return { kind: "unexpected", status: e.status };
+  }
+  return { kind: "unexpected", status: null };
+}
+
 /**
  * @returns view.weather
  */
 export async function getWeather({ weather, cacheDir, timezone, now, fetchImpl, sleep, log }) {
   const { areaCode, areaName, tempPointName } = weather;
   const today = ymd(now, timezone);
-  const base = { areaCode, failedAt: null, failReason: null, fetchedAt: null, office: null, reportDatetime: null, areaName: null, tempPointName: null, days: [] };
+  const base = { areaCode, failedAt: null, failReason: null, failCause: null, fetchedAt: null, office: null, reportDatetime: null, areaName: null, tempPointName: null, days: [] };
 
   const cacheFile = forecastCacheFile(cacheDir, areaCode);
   const logFile = requestLogFile(cacheDir);
@@ -64,13 +74,17 @@ export async function getWeather({ weather, cacheDir, timezone, now, fetchImpl, 
     return { ...base, state, fetchedAt, office: ex.office, reportDatetime: ex.reportDatetime, areaName: ex.areaName, tempPointName: ex.tempPointName, days: ex.days };
   };
 
-  const failed = (reason) => ({ ...base, state: "failed", failReason: reason, failedAt: now });
+  // cause（失敗の原因。画面の「原因：」の1行に使う。上限のときは null）：
+  //   { kind: "area-unknown", code } | { kind: "network" } | { kind: "unexpected", status: number | null }
+  const failed = (reason, cause = null) => ({ ...base, state: "failed", failReason: reason, failCause: reason === "limit" ? null : cause, failedAt: now });
 
-  const fallback = (reason) => {
+  const fallback = (reason, cause = null) => {
     // reason: "error" | "limit"
     if (canUseStale(cache, now)) return fromBody(cache.body, cache.fetchedAt, "stale");
-    return failed(reason);
+    return failed(reason, cause);
   };
+
+  const areaUnknown = { kind: "area-unknown", code: areaCode };
 
   const plan = planWeather({ cache, requestCount: requests.length, now });
 
@@ -106,7 +120,7 @@ export async function getWeather({ weather, cacheDir, timezone, now, fetchImpl, 
         await writeJsonAtomic(areaCacheFile(cacheDir), { lastAreaCode: areaCode, fetchedAt: now.toISOString(), offices });
         if (!offices.includes(areaCode)) {
           log(CONFIG_MESSAGES.areaUnknown(areaCode));
-          return failed("error");
+          return failed("error", areaUnknown);
         }
       }
     } catch {
@@ -114,7 +128,7 @@ export async function getWeather({ weather, cacheDir, timezone, now, fetchImpl, 
     }
   } else if (!areaCache.offices.includes(areaCode)) {
     log(CONFIG_MESSAGES.areaUnknown(areaCode));
-    return failed("error");
+    return failed("error", areaUnknown);
   }
 
   if (budget <= 0) {
@@ -134,9 +148,10 @@ export async function getWeather({ weather, cacheDir, timezone, now, fetchImpl, 
     });
     text = r.text;
   } catch (e) {
-    if (e instanceof FetchError && e.kind === "http" && e.status === 404) log(CONFIG_MESSAGES.areaUnknown(areaCode));
+    const cause = causeOf(e, areaUnknown);
+    if (cause.kind === "area-unknown") log(CONFIG_MESSAGES.areaUnknown(areaCode));
     else log(WEATHER_MESSAGES.failed);
-    return fallback("error");
+    return fallback("error", cause);
   }
 
   let body;
@@ -145,8 +160,9 @@ export async function getWeather({ weather, cacheDir, timezone, now, fetchImpl, 
     body = JSON.parse(text);
     view = fromBody(body, now, "fresh");
   } catch {
+    // JSON として読めない、または形が違う（HTTP は 200 なので番号は出さない）
     log(WEATHER_MESSAGES.failed);
-    return fallback("error");
+    return fallback("error", { kind: "unexpected", status: null });
   }
   await writeJsonAtomic(cacheFile, { areaCode, fetchedAt: now.toISOString(), reportDatetime: view.reportDatetime, body });
   if (isReportOld(view.reportDatetime, now)) log(WEATHER_MESSAGES.oldReport(reportLabel(view.reportDatetime)));

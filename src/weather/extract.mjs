@@ -42,7 +42,8 @@ function pickArea(areas, wantedName, wantedCode) {
  * 降水確率の時間帯。始まりは timeDefines、終わりは次の timeDefines から出す。
  * - 次が同じ日 → その時刻（12–18時）
  * - 次が翌日の0時 → 24時（18–24時）
- * - 次が無い、またはそれ以外（日をまたぐ） → 終わりなし（18時〜）
+ * - 次が無い最後の時間帯：前の区切りがすべて6時間おきなら +6時間（18–24時）。そうでなければ終わりなし（18時〜）
+ * - 日をまたぐ（次が翌日0時以外） → 終わりなし（18時〜）
  * 時刻に分が付くとき（例：12:30）は分を捨てず "12:30" の形で持つ（時刻を変えて出さないため）。
  */
 /** 時刻の表記：分が0なら時だけ（"12"）、分があれば "12:30"。 */
@@ -62,6 +63,7 @@ export function popSlots(timeDefines, pops) {
       if (next.date === cur.date && nextMin > curMin) to = clock(next);
       else if (next.date === addDays(cur.date, 1) && next.hour === 0 && next.minute === 0) to = "24";
     }
+    if (!next && i === timeDefines.length - 1 && allSixHourly(timeDefines)) to = sixHoursAfter(cur);
     out.push({
       date: cur.date,
       from: clock(cur),
@@ -70,6 +72,27 @@ export function popSlots(timeDefines, pops) {
     });
   }
   return out;
+}
+
+const SIX_HOURS_MS = 6 * 60 * 60 * 1000;
+
+/** 区切りが2つ以上あり、前の区切りがすべて6時間おきか（最後の時間帯に +6時間を足してよい条件。設計書の降水確率）。 */
+function allSixHourly(timeDefines) {
+  if (timeDefines.length < 2) return false;
+  for (let i = 1; i < timeDefines.length; i++) {
+    const a = Date.parse(timeDefines[i - 1]);
+    const b = Date.parse(timeDefines[i]);
+    if (!Number.isFinite(a) || !Number.isFinite(b) || b - a !== SIX_HOURS_MS) return false;
+  }
+  return true;
+}
+
+/** 始まりの6時間後。同じ日に収まればその時刻、ちょうど翌日0時なら "24"、それより後なら null（終わりを決めない）。 */
+function sixHoursAfter(cur) {
+  const end = cur.hour * 60 + cur.minute + 360;
+  if (end < 1440) return clock({ hour: Math.floor(end / 60), minute: end % 60 });
+  if (end === 1440) return "24";
+  return null;
 }
 
 /**
