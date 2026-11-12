@@ -113,10 +113,6 @@ main > section, .duo > section { background: var(--surface); border: 1px solid v
 .sec-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: var(--sp-2) var(--sp-3); padding-bottom: var(--sp-2); border-bottom: var(--rule); margin-bottom: var(--sp-4); }
 .sec-head h2 { font-size: var(--fs-lg); }
 .sec-head .area { color: var(--dim); font-size: var(--fs-sm); }
-.sec-head h2::before { content: var(--ico); content: var(--ico) / ""; margin-right: 0.4em; }
-.weather .sec-head { --ico: "🌤️"; }
-.schedule .sec-head { --ico: "📅"; }
-.news .sec-head { --ico: "📰"; }
 .alert { color: var(--accent-text); border-left: var(--rule-strong); padding-left: var(--sp-3); font-size: var(--fs-md); }
 .alert p + p { margin-top: var(--sp-1); }
 .stale-note { margin-bottom: var(--sp-4); }
@@ -129,9 +125,6 @@ main > section, .duo > section { background: var(--surface); border: 1px solid v
 .day-empty { color: var(--dim); margin-bottom: var(--sp-2); }
 .wx { font-size: var(--fs-lg); line-height: 1.5; margin-bottom: var(--sp-3); padding-bottom: var(--sp-3); border-bottom: 1px dashed var(--line); }
 .label { font-size: var(--fs-sm); color: var(--dim); font-weight: var(--fw-strong); margin: var(--sp-3) 0 var(--sp-2); }
-.label::before { content: var(--ico); content: var(--ico) / ""; margin-right: 0.35em; }
-.label-pop { --ico: "💧"; }
-.label-temp { --ico: "🌡️"; }
 .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(4.5rem, 1fr)); gap: var(--sp-2); }
 .grid > div { min-width: 0; padding: var(--sp-2) var(--sp-3); background: var(--surface); border: 1px solid var(--line); border-radius: 10px; }
 .grid dt { font-size: var(--fs-sm); color: var(--dim); font-variant-numeric: tabular-nums; }
