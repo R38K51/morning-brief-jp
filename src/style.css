@@ -114,7 +114,7 @@ main > section, .duo > section { background: var(--surface); border: 1px solid v
 .sec-head h2 { font-size: var(--fs-lg); }
 .sec-head .area { color: var(--dim); font-size: var(--fs-sm); }
 .sec-head h2::before { content: var(--ico); content: var(--ico) / ""; margin-right: 0.4em; }
-.weather .sec-head { --ico: "🌤️"; }
+.weather .sec-head { --ico: "📍"; }
 .schedule .sec-head { --ico: "📅"; }
 .news .sec-head { --ico: "📰"; }
 .alert { color: var(--accent-text); border-left: var(--rule-strong); padding-left: var(--sp-3); font-size: var(--fs-md); }
