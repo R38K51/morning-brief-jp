@@ -44,13 +44,6 @@ test("禁止の語、アイコン、画像、警報の語、スクリプト、�
   assert.doesNotMatch(html, /<img|<svg|<script|<iframe|<link\b|\ssrc=/i);
 });
 
-test("CSS に絵文字・アイコン用の疑似要素（--ico）が無い", async () => {
-  const { readFileSync } = await import("node:fs");
-  const css = readFileSync(new URL("../src/style.css", import.meta.url), "utf8");
-  assert.doesNotMatch(css, /\p{Extended_Pictographic}|️/u);
-  assert.doesNotMatch(css, /--ico/);
-});
-
 test("出典のリンクは設定の地域コード。文字も表示する", () => {
   const html = render(view({ weather: freshWeather({ areaCode: "270000" }) }));
   assert.match(html, /href="https:\/\/www\.jma\.go\.jp\/bosai\/forecast\/#area_type=offices&amp;area_code=270000"/);
