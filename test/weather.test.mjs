@@ -68,7 +68,17 @@ test("失敗して24時間以内（発表から）のキャッシュがあれば
   assert.equal(w.fetchedAt.toISOString(), JST("2026-11-10T18:20:00").toISOString());
   assert.equal(f.calls.length, 2, "再試行は1回だけ");
   assert.deepEqual(sleep.waits, [60_000], "気象庁の再試行は60秒あける");
+  assert.ok(logs.includes(WEATHER_MESSAGES.failedUnexpected), "HTTP 500 は想定外の応答の文");
+});
+
+test("つながらないときのコンソールは現行の文（network）", async (t) => {
+  const d = await tempDir();
+  t.after(d.cleanup);
+  const cacheDir = await setup(d);
+  const f = fakeFetch({ [FORECAST_URL("130000")]: new TypeError("fetch failed") });
+  const { logs } = await call(cacheDir, JST("2026-11-11T07:00:00"), f);
   assert.ok(logs.includes(WEATHER_MESSAGES.failed));
+  assert.equal(WEATHER_MESSAGES.failedUnexpected, "気象庁のデータを取得できませんでした。時間をおいてもう一度実行してください。");
 });
 
 test("24時間を超えたキャッシュは出さない", async (t) => {
@@ -106,7 +116,7 @@ test("上限（4回）でキャッシュなし：取りに行かず、上限の�
 
 // 失敗の原因（画面の「原因：」の1行）。キャッシュなしで失敗させる。
 for (const [name, handler, cause] of [
-  ["404 → 地域コード", { status: 404, body: "" }, { kind: "area-unknown", code: "130000" }],
+  ["404（offices で確かめた後）→ 想定外の応答（HTTP 404）", { status: 404, body: "" }, { kind: "unexpected", status: 404 }],
   ["つながらない → 接続", new TypeError("fetch failed"), { kind: "network" }],
   ["タイムアウト → 接続", new DOMException("The operation was aborted due to timeout", "TimeoutError"), { kind: "network" }],
   ["503 → 想定外の応答（番号つき）", { status: 503, body: "" }, { kind: "unexpected", status: 503 }],
@@ -235,7 +245,7 @@ test("キャッシュの3時間ちょうどは取りに行かず、1秒でも過
   assert.equal(over.w.fetchedAt.toISOString(), JST("2026-11-11T14:10:01").toISOString());
 });
 
-test("404 は再試行せず、地域コードの文言", async (t) => {
+test("404（offices で確かめた後）は再試行せず、想定外の応答。地域コードの文言は出さない", async (t) => {
   const d = await tempDir();
   t.after(d.cleanup);
   const cacheDir = await setup(d);
@@ -244,7 +254,29 @@ test("404 は再試行せず、地域コードの文言", async (t) => {
   assert.equal(f.calls.length, 1);
   assert.deepEqual(sleep.waits, []);
   assert.equal(w.state, "failed");
+  assert.deepEqual(w.failCause, { kind: "unexpected", status: 404 });
+  assert.ok(logs.includes(WEATHER_MESSAGES.failedUnexpected));
+  assert.equal(logs.some((m) => m.includes("気象庁のデータにありません")), false);
+});
+
+test("area.json が取れず確認を飛ばしたときだけ、予報の 404 を地域コードの原因にする", async (t) => {
+  const d = await tempDir();
+  t.after(d.cleanup);
+  const cacheDir = await setup(d, { area: false });
+  const f = fakeFetch({ [AREA_URL]: { status: 500, body: "" }, [FORECAST_URL("130000")]: { status: 404, body: "" } });
+  const { w, logs } = await call(cacheDir, JST("2026-11-11T07:00:00"), f);
+  assert.equal(w.state, "failed");
+  assert.deepEqual(w.failCause, { kind: "area-unknown", code: "130000", status: 404 });
   assert.ok(logs.includes("地域コード 130000 が気象庁のデータにありません。weather.areaCode を確かめてください。"));
+});
+
+test("area.json で確かめた初回の実行でも、予報の 404 は想定外の応答", async (t) => {
+  const d = await tempDir();
+  t.after(d.cleanup);
+  const cacheDir = await setup(d, { area: false });
+  const f = fakeFetch({ [AREA_URL]: { body: areaJson() }, [FORECAST_URL("130000")]: { status: 404, body: "" } });
+  const { w } = await call(cacheDir, JST("2026-11-11T07:00:00"), f);
+  assert.deepEqual(w.failCause, { kind: "unexpected", status: 404 });
 });
 
 test("初回は area.json を1回取り、offices に無い地域コードなら予報を取りに行かない", async (t) => {

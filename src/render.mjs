@@ -10,19 +10,30 @@ const CSS = readFileSync(new URL("./style.css", import.meta.url), "utf8");
 export const TEXT = {
   pageTitle: "朝のまとめ",
   skip: "本文へ移動",
-  weatherHeading: "天気",
+  weatherHeading: "天気（気象庁の発表）",
   pop: "降水確率",
   min: "最低",
   max: "最高",
   none: "—（発表なし）",
   weatherFailed: (hm) => `気象庁のデータを取得できませんでした（${hm}）`,
-  weatherRecover: "設定の地域コードと通信を確かめて、時間をおいてもう一度実行してください。",
+  // 回復の案内は原因別。network は現行の文のまま
+  weatherRecover: {
+    network: "設定の地域コードと通信を確かめて、時間をおいてもう一度実行してください。",
+    unexpected: "時間をおいてもう一度実行してください。",
+    "area-unknown": "weather.areaCode を確かめてください。",
+  },
   weatherLimit: "本日の気象庁への取得回数の上限に達しました。天気の欄は取得できませんでした。",
   causeAreaUnknown: (code) => `原因：地域コード ${code} が気象庁のデータにありません。`,
+  // area.json が取れず、地域コードの確認を飛ばしたときの予報の 404
+  causeAreaNotFound: (code) => `原因：地域コード ${code} が見つかりませんでした（HTTP 404）。`,
   causeNetwork: "原因：気象庁のサーバーに接続できませんでした。",
   causeUnexpected: (status) => (status ? `原因：気象庁から想定外の応答がありました（HTTP ${status}）。` : "原因：気象庁から想定外の応答がありました。"),
   // 発表が今日のとき（今日の 05:00 発表を昼に前回取得分で出すなど）は、事実と合わない2文目を付けない
   staleNote: (report, reportIsToday) => `前回取得分：${report} 発表の予報です。${reportIsToday ? "" : "今日の発表ではありません。"}`,
+  noteReport: (office, report) =>
+    `発表：${office}（${report}）。気象庁の天気予報を、文言と数値を変えずに表示しています。項目の抜き出し、並べ方、日付と時間帯の書き方は morning-brief-jp が行っています。`,
+  noteFetched: (t) => `取得：${t}。最新の情報は気象庁ホームページで確かめてください。表示の遅れや誤りについて、作者は責任を負いません。`,
+  noteIndependent: "このツールは気象庁とは関係のない個人の作品です。",
   dayNotIncluded: (report, label) => `この発表（${report}）に、${label}の項目は含まれていません。`,
   sourceJmaUrl: (code) => `https://www.jma.go.jp/bosai/forecast/#area_type=offices&area_code=${code}`,
   sourcePdlUrl: "https://www.digital.go.jp/resources/open_data/public_data_license_v1.0",
@@ -72,12 +83,12 @@ function dayAllEmpty(day) {
   return isEmpty(day.weather) && day.pops.every((p) => isEmpty(p.value)) && isEmpty(day.tempMin) && !day.tempMinHidden && isEmpty(day.tempMax);
 }
 
-function renderDay(day, report) {
+function renderDay(day, report, tempPointName) {
   const notIncluded = day.label && dayAllEmpty(day) ? `<p class="day-empty">${esc(TEXT.dayNotIncluded(report, day.label))}</p>\n` : "";
   const pops = day.pops.length
     ? `<dl class="grid pops">${day.pops.map((p) => `<div><dt>${esc(popLabel(p))}</dt><dd>${esc(valueOrNone(p.value, "%"))}</dd></div>`).join("")}</dl>`
     : `<p>${esc(TEXT.none)}</p>`;
-  const tempLabel = "気温";
+  const tempLabel = tempPointName ? `気温（${tempPointName}）` : "気温";
   return `<article class="day">
 <h3>${esc(dayHeading(day))}</h3>
 ${notIncluded}<p class="wx">${esc(day.weather ?? TEXT.none)}</p>
@@ -90,10 +101,15 @@ ${pops}
 
 function causeText(cause) {
   if (!cause) return null;
-  if (cause.kind === "area-unknown") return TEXT.causeAreaUnknown(cause.code);
+  if (cause.kind === "area-unknown") return cause.status === 404 ? TEXT.causeAreaNotFound(cause.code) : TEXT.causeAreaUnknown(cause.code);
   if (cause.kind === "network") return TEXT.causeNetwork;
   if (cause.kind === "unexpected") return TEXT.causeUnexpected(cause.status);
   return null;
+}
+
+/** 失敗の回復の案内（原因別）。原因が分からないときは network と同じ現行の文。 */
+function recoverText(cause) {
+  return TEXT.weatherRecover[cause?.kind] ?? TEXT.weatherRecover.network;
 }
 
 function reportText(reportDatetime) {
@@ -111,13 +127,13 @@ export function renderWeather(w, { now, timezone }) {
     body =
       w.failReason === "limit"
         ? `<div class="alert"><p>${esc(TEXT.weatherLimit)}</p></div>`
-        : `<div class="alert"><p>${esc(TEXT.weatherFailed(formatHM(w.failedAt, timezone)))}</p><p>${esc(TEXT.weatherRecover)}</p>${cause ? `<p class="cause">${esc(cause)}</p>` : ""}</div>`;
+        : `<div class="alert"><p>${esc(TEXT.weatherFailed(formatHM(w.failedAt, timezone)))}</p><p>${esc(recoverText(w.failCause))}</p>${cause ? `<p class="cause">${esc(cause)}</p>` : ""}</div>`;
   } else {
     const report = reportText(w.reportDatetime);
     const reportIsToday = jmaLocalParts(w.reportDatetime)?.date === ymd(now, timezone);
     const staleNote = w.state === "stale" ? `<div class="alert stale-note"><p>${esc(TEXT.staleNote(report, reportIsToday))}</p></div>\n` : "";
     body = `${staleNote}<div class="days">
-${w.days.map((d) => renderDay(d, report)).join("\n")}
+${w.days.map((d) => renderDay(d, report, w.tempPointName)).join("\n")}
 </div>`;
   }
   return `<section class="weather" aria-labelledby="h-weather">
@@ -126,11 +142,22 @@ ${body}
 </section>`;
 }
 
-/** 出典と加工の表示（気象庁の利用条件で必要）。画面の下、フッターに小さく出す。 */
-export function renderCredits(w) {
+/**
+ * 出典と注記（気象庁の利用条件で必要）。画面の下、フッターに小さく出す。設計書「出典と注記」の見本と同じ文言。
+ * 取得に成功したとき（fresh・stale）だけ、発表・取得の文と、加工の表示（「作成」の行）を出す。失敗のときは出典と「関係のない個人の作品です」だけ。
+ */
+export function renderCredits(w, { now, timezone }) {
+  const ok = w.state !== "failed";
+  const lines = [];
+  if (ok) {
+    lines.push(`<p>${brand(esc(TEXT.noteReport(w.office ?? "", reportText(w.reportDatetime))))}</p>`);
+    lines.push(`<p>${esc(TEXT.noteFetched(formatHMWithDate(w.fetchedAt, now, timezone)))}</p>`);
+  }
+  lines.push(`<p>${esc(TEXT.noteIndependent)}</p>`);
+  lines.push(`<p class="source">出典：<span class="src-line">気象庁ホームページ（${link(TEXT.sourceJmaUrl(w.areaCode), TEXT.sourceJmaUrl(w.areaCode))}）、</span><span class="src-line">公共データ利用規約（第1.0版）（${link(TEXT.sourcePdlUrl, TEXT.sourcePdlUrl)}）</span></p>`);
+  if (ok) lines.push(`<p>${brand(esc(TEXT.noteProcessed))}</p>`);
   return `<div class="credits">
-<p class="source">出典：<span class="src-line">気象庁ホームページ（${link(TEXT.sourceJmaUrl(w.areaCode), TEXT.sourceJmaUrl(w.areaCode))}）、</span><span class="src-line">公共データ利用規約（第1.0版）（${link(TEXT.sourcePdlUrl, TEXT.sourcePdlUrl)}）</span></p>
-<p>${brand(esc(TEXT.noteProcessed))}</p>
+${lines.join("\n")}
 </div>`;
 }
 
@@ -231,7 +258,7 @@ ${CSS}
 ${main}
 </main>
 <footer>
-${renderCredits(view.weather)}
+${renderCredits(view.weather, ctx)}
 <p class="made">${brand(esc(TEXT.footer(view.version, created)))}</p>
 </footer>
 </div>

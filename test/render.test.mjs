@@ -8,6 +8,9 @@ import { htmlText, JST, paragraphs } from "./helpers.mjs";
 const NOW = JST("2026-11-11T11:12:00");
 
 // 正の文（天気仕様の3回目の文と、仕様1・2の残りの文）。設計書「出典と注記」。
+const NOTE1 = "発表：気象庁（2026-11-11 11:00）。気象庁の天気予報を、文言と数値を変えずに表示しています。項目の抜き出し、並べ方、日付と時間帯の書き方は morning-brief-jp が行っています。";
+const NOTE2 = (t) => `取得：${t}。最新の情報は気象庁ホームページで確かめてください。表示の遅れや誤りについて、作者は責任を負いません。`;
+const NOTE3 = "このツールは気象庁とは関係のない個人の作品です。";
 const SOURCE = (code) => `出典：気象庁ホームページ（https://www.jma.go.jp/bosai/forecast/#area_type=offices&area_code=${code}）、公共データ利用規約（第1.0版）（https://www.digital.go.jp/resources/open_data/public_data_license_v1.0）`;
 const PROCESSED = "気象庁ホームページの天気予報をもとに morning-brief-jp が作成（文言と数値は変更していません）";
 
@@ -20,9 +23,11 @@ const view = (o = {}) => ({ version: "0.1.0", createdAt: NOW, timezone: "Asia/To
 
 test("天気の欄の見出しと、注記・出典・加工の表示が一字一句同じで、別の段落", () => {
   const html = render(view());
-  assert.match(html, /<h2 id="h-weather">天気<\/h2>/);
+  assert.match(html, /<h2 id="h-weather">天気（気象庁の発表）<\/h2>/);
   const ps = paragraphs(html);
-  for (const s of [SOURCE("130000"), PROCESSED]) assert.ok(ps.includes(s), `段落が無い：${s}`);
+  for (const s of [NOTE1, NOTE2("11:12"), NOTE3, SOURCE("130000"), PROCESSED]) assert.ok(ps.includes(s), `段落が無い：${s}`);
+  // 見本の順（発表、取得、個人の作品、出典、加工の表示）
+  assert.deepEqual([NOTE1, NOTE2("11:12"), NOTE3, SOURCE("130000"), PROCESSED].map((x) => ps.indexOf(x)), [NOTE1, NOTE2("11:12"), NOTE3, SOURCE("130000"), PROCESSED].map((x) => ps.indexOf(x)).sort((a, b) => a - b));
   // 出典と加工の表示は別の段落
   assert.notEqual(ps.indexOf(SOURCE("130000")), ps.indexOf(PROCESSED));
 });
@@ -48,13 +53,15 @@ test("出典のリンクは設定の地域コード。文字も表示する", ()
 test("発表時刻と取得時刻が別に出る。前日の取得は月日つき", () => {
   const html = render(view({ weather: freshWeather({ state: "stale", fetchedAt: JST("2026-11-10T18:20:00") }) }));
   const ps = paragraphs(html);
+  assert.ok(ps.includes(NOTE1));
+  assert.ok(ps.includes(NOTE2("11-10 18:20")), "前回取得分の「取得：」は月日つき");
   assert.match(html, /<div class="alert stale-note"><p>前回取得分：/);
 });
 
 test("「前回取得分」は stale のときだけ。見出しの横の印は出さない（帯だけ）", () => {
   assert.equal(render(view()).includes("前回取得分"), false);
   const stale = render(view({ weather: freshWeather({ state: "stale", fetchedAt: JST("2026-11-10T18:20:00") }) }));
-  assert.match(stale, /<div class="sec-head"><h2 id="h-weather">天気<\/h2>(<span class="area">[^<]*<\/span>)?<\/div>/);
+  assert.match(stale, /<div class="sec-head"><h2 id="h-weather">天気（気象庁の発表）<\/h2>(<span class="area">[^<]*<\/span>)?<\/div>/);
   assert.equal(stale.split("前回取得分").length - 1, 1, "「前回取得分」は帯の1回だけ");
 });
 
@@ -73,7 +80,7 @@ test("日ごとの表示：見出し、天気の文、降水確率の時間帯�
   assert.match(text, /18–24時\n+10%/);
   assert.match(text, /18–24時\n+50%/, "最後の時間帯：前がすべて6時間おきなので 18–24時");
   assert.equal(text.includes("18時〜"), false);
-  assert.equal(text.includes("気温（東京）"), false);
+  assert.match(text, /気温（東京）/);
   assert.match(text, /最低\n+—（発表なし）\n+最高\n+16℃/);
   assert.match(text, /最低\n+8℃\n+最高\n+17℃/);
 });
@@ -86,8 +93,10 @@ test("取得失敗：失敗の文の下に別の行で回復の案内。官署�
   assert.ok(i >= 0);
   assert.equal(ps[i + 1], "設定の地域コードと通信を確かめて、時間をおいてもう一度実行してください。");
   assert.equal(ps.some((p) => p.startsWith("発表：") || p.startsWith("取得：")), false);
-  for (const s of [SOURCE("130000"), PROCESSED]) assert.ok(ps.includes(s));
-  assert.match(html, /<h2 id="h-weather">天気<\/h2>/);
+  for (const s of [NOTE3, SOURCE("130000")]) assert.ok(ps.includes(s));
+  assert.equal(ps.includes(PROCESSED), false, "失敗のときは「作成」の加工の表示行を出さない");
+  assert.equal(htmlText(html).includes("が作成"), false);
+  assert.match(html, /<h2 id="h-weather">天気（気象庁の発表）<\/h2>/);
 });
 
 test("上限でキャッシュなし：上限の文だけ（回復の案内と「前回取得分を使います」は出さない）", () => {
@@ -101,19 +110,22 @@ test("上限でキャッシュなし：上限の文だけ（回復の案内と�
 
 // 失敗画面の「原因：」の1行（既存の2行は変えず、その下に足す）
 const failedWith = (failCause, failReason = "error") => ({ state: "failed", failReason, failCause, areaCode: "130000", failedAt: JST("2026-11-11T06:12:00"), fetchedAt: null, office: null, reportDatetime: null, areaName: null, tempPointName: null, days: [] });
-const FAILED_LINES = ["気象庁のデータを取得できませんでした（06:12）", "設定の地域コードと通信を確かめて、時間をおいてもう一度実行してください。"];
+const RECOVER = { network: "設定の地域コードと通信を確かめて、時間をおいてもう一度実行してください。", unexpected: "時間をおいてもう一度実行してください。", "area-unknown": "weather.areaCode を確かめてください。" };
+const failedLines = (kind) => ["気象庁のデータを取得できませんでした（06:12）", RECOVER[kind]];
 
 for (const [name, cause, line] of [
-  ["地域コードが気象庁にない（404）", { kind: "area-unknown", code: "999999" }, "原因：地域コード 999999 が気象庁のデータにありません。"],
+  ["地域コードが気象庁にない（offices に無い）", { kind: "area-unknown", code: "999999" }, "原因：地域コード 999999 が気象庁のデータにありません。"],
+  ["地域コードの確認を飛ばしたときの 404", { kind: "area-unknown", code: "999999", status: 404 }, "原因：地域コード 999999 が見つかりませんでした（HTTP 404）。"],
+  ["確認後の 404 は想定外の応答", { kind: "unexpected", status: 404 }, "原因：気象庁から想定外の応答がありました（HTTP 404）。"],
   ["接続できない", { kind: "network" }, "原因：気象庁のサーバーに接続できませんでした。"],
   ["想定外の応答（HTTP 503）", { kind: "unexpected", status: 503 }, "原因：気象庁から想定外の応答がありました（HTTP 503）。"],
   ["想定外の応答（番号なし：JSON が読めない）", { kind: "unexpected", status: null }, "原因：気象庁から想定外の応答がありました。"],
 ]) {
   test(`取得失敗の原因：${name}。既存の2行の下に1行`, () => {
     const ps = paragraphs(render(view({ weather: failedWith(cause) })));
-    const i = ps.indexOf(FAILED_LINES[0]);
+    const i = ps.indexOf(failedLines(cause.kind)[0]);
     assert.ok(i >= 0);
-    assert.deepEqual(ps.slice(i, i + 3), [...FAILED_LINES, line]);
+    assert.deepEqual(ps.slice(i, i + 3), [...failedLines(cause.kind), line]);
     assert.equal(ps.filter((p) => p.startsWith("原因：")).length, 1);
   });
 }
@@ -123,7 +135,7 @@ test("取得失敗の原因：上限のときと、原因が分からないと�
   assert.equal(htmlText(limit).includes("原因："), false);
   const unknown = paragraphs(render(view({ weather: failedWith(null) })));
   assert.equal(unknown.some((p) => p.startsWith("原因：")), false);
-  assert.ok(unknown.includes(FAILED_LINES[1]));
+  assert.ok(unknown.includes(RECOVER.network), "原因が分からないときは現行の文");
 });
 
 test("前回取得分：見出しのすぐ下、地方名の上に発表時刻つきの1行（「昨日」は使わない）。注記の発表・取得はそのまま", () => {

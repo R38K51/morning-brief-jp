@@ -14,7 +14,8 @@ export const JMA_RETRY_DELAY_MS = 60_000;
 
 export const WEATHER_MESSAGES = {
   fetching: "気象庁から取得しています…",
-  failed: "気象庁のデータを取得できませんでした。設定の地域コードと通信を確かめて、時間をおいてもう一度実行してください。",
+  failed: "気象庁のデータを取得できませんでした。設定の地域コードと通信を確かめて、時間をおいてもう一度実行してください。", // 原因が network のとき
+  failedUnexpected: "気象庁のデータを取得できませんでした。時間をおいてもう一度実行してください。",
   limitWithCache: "本日の気象庁への取得回数の上限に達したため、前回取得分を使います。",
   limitNoCache: "本日の気象庁への取得回数の上限に達しました。天気の欄は取得できませんでした。",
   oldReport: (r) => `気象庁の発表が24時間より古いままです（発表：${r}）。`,
@@ -26,9 +27,10 @@ function reportLabel(reportDatetime) {
 }
 
 /** 取得の失敗 → 画面の「原因：」の種類。404 は地域コード、つながらない（タイムアウトを含む）は接続、それ以外は想定外の応答。 */
-export function causeOf(e, areaUnknown) {
+export function causeOf(e, areaUnknown, areaChecked = false) {
   if (e instanceof FetchError) {
-    if (e.kind === "http" && e.status === 404) return areaUnknown;
+    // 404：area.json で地域コードの存在を確かめた後なら想定外の応答。確かめを飛ばしたときだけ地域コードの問題として扱う
+    if (e.kind === "http" && e.status === 404) return areaChecked ? { kind: "unexpected", status: 404 } : { ...areaUnknown, status: 404 };
     if (e.kind === "network" || e.kind === "timeout") return { kind: "network" };
     if (e.kind === "http") return { kind: "unexpected", status: e.status };
   }
@@ -85,6 +87,7 @@ export async function getWeather({ weather, cacheDir, timezone, now, fetchImpl, 
   };
 
   const areaUnknown = { kind: "area-unknown", code: areaCode };
+  let areaChecked = false; // area.json（またはその控え）で地域コードが offices にあると確かめたか
 
   const plan = planWeather({ cache, requestCount: requests.length, now });
 
@@ -122,6 +125,7 @@ export async function getWeather({ weather, cacheDir, timezone, now, fetchImpl, 
           log(CONFIG_MESSAGES.areaUnknown(areaCode));
           return failed("error", areaUnknown);
         }
+        areaChecked = true;
       }
     } catch {
       // area.json が取れなければ確かめを飛ばして予報を取りに行く
@@ -129,6 +133,8 @@ export async function getWeather({ weather, cacheDir, timezone, now, fetchImpl, 
   } else if (!areaCache.offices.includes(areaCode)) {
     log(CONFIG_MESSAGES.areaUnknown(areaCode));
     return failed("error", areaUnknown);
+  } else {
+    areaChecked = true;
   }
 
   if (budget <= 0) {
@@ -148,9 +154,9 @@ export async function getWeather({ weather, cacheDir, timezone, now, fetchImpl, 
     });
     text = r.text;
   } catch (e) {
-    const cause = causeOf(e, areaUnknown);
+    const cause = causeOf(e, areaUnknown, areaChecked);
     if (cause.kind === "area-unknown") log(CONFIG_MESSAGES.areaUnknown(areaCode));
-    else log(WEATHER_MESSAGES.failed);
+    else log(cause.kind === "unexpected" ? WEATHER_MESSAGES.failedUnexpected : WEATHER_MESSAGES.failed);
     return fallback("error", cause);
   }
 
@@ -161,7 +167,7 @@ export async function getWeather({ weather, cacheDir, timezone, now, fetchImpl, 
     view = fromBody(body, now, "fresh");
   } catch {
     // JSON として読めない、または形が違う（HTTP は 200 なので番号は出さない）
-    log(WEATHER_MESSAGES.failed);
+    log(WEATHER_MESSAGES.failedUnexpected);
     return fallback("error", { kind: "unexpected", status: null });
   }
   await writeJsonAtomic(cacheFile, { areaCode, fetchedAt: now.toISOString(), reportDatetime: view.reportDatetime, body });

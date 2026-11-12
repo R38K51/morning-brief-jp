@@ -81,6 +81,11 @@ test("天気だけ失敗：天気の欄が失敗の文、ほかの欄は出る",
   assert.ok(ps.includes("設定の地域コードと通信を確かめて、時間をおいてもう一度実行してください。"));
   assert.match(htmlText(r.html), /会議の例/);
   assert.ok(r.logs.includes("気象庁のデータを取得できませんでした。設定の地域コードと通信を確かめて、時間をおいてもう一度実行してください。"));
+  assert.ok(r.logs.includes("欄：天気（取得できませんでした） / 予定 / ニュース（2件のフィード）"));
+  // 失敗のときは「作成」の加工の表示行を出さない。出典と「関係のない個人の作品です」は残る
+  assert.equal(ps.some((p) => p.endsWith("が作成（文言と数値は変更していません）")), false);
+  assert.ok(ps.includes("このツールは気象庁とは関係のない個人の作品です。"));
+  assert.ok(ps.some((p) => p.startsWith("出典：気象庁ホームページ")));
 });
 
 test("予定だけ失敗：決まった文言。ほかの欄は出る", async (t) => {

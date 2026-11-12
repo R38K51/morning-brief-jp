@@ -112,7 +112,7 @@ export async function run({ configPath, now = new Date(), fetchImpl = globalThis
   const html = render(view);
   await writeAtomic(config.outputPath, html);
 
-  const sections = ["天気"];
+  const sections = [weather.state === "failed" ? "天気（取得できませんでした）" : "天気"];
   if (schedule) sections.push("予定");
   if (news) sections.push(`ニュース（${feeds.length}件のフィード）`);
   log(MAIN_MESSAGES.done(config.outputPath));
