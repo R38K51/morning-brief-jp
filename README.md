@@ -1,5 +1,7 @@
 <div align="center">
 
+<img src="docs/icon.png" width="96" alt="morning-brief-jp icon">
+
 # morning-brief-jp
 
 **Your morning weather, calendar and news headlines on one HTML page — local only.**<br>
