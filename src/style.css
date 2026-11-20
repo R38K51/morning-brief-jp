@@ -126,6 +126,7 @@ main > section, .duo > section { background: var(--surface); border: 1px solid v
 .day { min-width: 0; padding: var(--sp-4); background: var(--soft); border: 1px solid var(--line); border-radius: 12px; }
 .day + .day { margin-top: var(--sp-3); }
 .day h3 { display: inline-block; font-size: var(--fs-sm); margin-bottom: var(--sp-2); padding: 0.1em 0.7em; background: var(--accent); color: #fff; border-radius: 999px; font-variant-numeric: tabular-nums; }
+@media (prefers-color-scheme: dark) { .day h3 { color: #1B1712; } }
 .day-empty { color: var(--dim); margin-bottom: var(--sp-2); }
 .wx { font-size: var(--fs-lg); line-height: 1.5; margin-bottom: var(--sp-3); padding-bottom: var(--sp-3); border-bottom: 1px dashed var(--line); }
 .label { font-size: var(--fs-sm); color: var(--dim); font-weight: var(--fw-strong); margin: var(--sp-3) 0 var(--sp-2); }

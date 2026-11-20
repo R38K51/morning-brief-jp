@@ -155,7 +155,7 @@ export async function getWeather({ weather, cacheDir, timezone, now, fetchImpl, 
     text = r.text;
   } catch (e) {
     const cause = causeOf(e, areaUnknown, areaChecked);
-    if (cause.kind === "area-unknown") log(CONFIG_MESSAGES.areaUnknown(areaCode));
+    if (cause.kind === "area-unknown") log(cause.status === 404 ? CONFIG_MESSAGES.areaNotFound(areaCode) : CONFIG_MESSAGES.areaUnknown(areaCode));
     else log(cause.kind === "unexpected" ? WEATHER_MESSAGES.failedUnexpected : WEATHER_MESSAGES.failed);
     return fallback("error", cause);
   }

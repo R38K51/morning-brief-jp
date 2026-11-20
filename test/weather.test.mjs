@@ -267,7 +267,7 @@ test("area.json が取れず確認を飛ばしたときだけ、予報の 404 �
   const { w, logs } = await call(cacheDir, JST("2026-11-11T07:00:00"), f);
   assert.equal(w.state, "failed");
   assert.deepEqual(w.failCause, { kind: "area-unknown", code: "130000", status: 404 });
-  assert.ok(logs.includes("地域コード 130000 が気象庁のデータにありません。weather.areaCode を確かめてください。"));
+  assert.ok(logs.includes("地域コード 130000 が見つかりませんでした（HTTP 404）。weather.areaCode を確かめてください。"));
 });
 
 test("area.json で確かめた初回の実行でも、予報の 404 は想定外の応答", async (t) => {

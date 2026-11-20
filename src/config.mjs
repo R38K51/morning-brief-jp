@@ -18,6 +18,7 @@ export const MESSAGES = {
     "weather.areaCode が設定されていません。気象庁の天気予報ページのアドレスにある area_code の数字を入れてください（東京都の例：130000）。",
   areaBadForm: (code) => `weather.areaCode の形が違います（${code}）。6桁の数字で書いてください（東京都の例：130000）。`,
   notObject: "config.json は { } で囲んだオブジェクトで書いてください（config.example.json の形）。",
+  areaNotFound: (code) => `地域コード ${code} が見つかりませんでした（HTTP 404）。weather.areaCode を確かめてください。`,
   areaUnknown: (code) => `地域コード ${code} が気象庁のデータにありません。weather.areaCode を確かめてください。`,
   badValue: (key, def) => `config.json の ${key} の値を確かめてください。既定値（${def}）を使います。`,
 };
